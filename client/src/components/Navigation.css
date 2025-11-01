@@ -1,0 +1,87 @@
+.navigation {
+  background-color: white;
+  border-bottom: 2px solid #e0e0e0;
+  padding: 0;
+  position: sticky;
+  top: 0;
+  z-index: 100;
+  box-shadow: 0 2px 4px rgba(0,0,0,0.05);
+}
+
+.nav-container {
+  max-width: 1400px;
+  margin: 0 auto;
+  padding: 10px 20px;
+  display: flex;
+  gap: 10px;
+  overflow-x: auto;
+  scrollbar-width: thin;
+}
+
+.nav-button {
+  padding: 12px 20px;
+  border: none;
+  background-color: #f5f5f5;
+  color: #333;
+  cursor: pointer;
+  border-radius: 6px;
+  font-size: 14px;
+  font-weight: 500;
+  white-space: nowrap;
+  transition: all 0.3s ease;
+  flex-shrink: 0;
+}
+
+.nav-button:hover {
+  background-color: #e8e8e8;
+  transform: translateY(-2px);
+}
+
+.nav-button.active {
+  background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+  color: white;
+  box-shadow: 0 4px 12px rgba(102, 126, 234, 0.4);
+}
+
+.nav-container::-webkit-scrollbar {
+  height: 8px;
+}
+
+.nav-container::-webkit-scrollbar-track {
+  background: #f1f1f1;
+}
+
+.nav-container::-webkit-scrollbar-thumb {
+  background: #888;
+  border-radius: 4px;
+}
+
+.nav-container::-webkit-scrollbar-thumb:hover {
+  background: #555;
+}
+
+/* Mobile Responsive */
+@media (max-width: 768px) {
+  .nav-container {
+    padding: 8px 10px;
+    gap: 8px;
+  }
+
+  .nav-button {
+    padding: 10px 16px;
+    font-size: 13px;
+  }
+}
+
+@media (max-width: 480px) {
+  .nav-container {
+    padding: 6px 8px;
+    gap: 6px;
+  }
+
+  .nav-button {
+    padding: 8px 12px;
+    font-size: 12px;
+  }
+}
+

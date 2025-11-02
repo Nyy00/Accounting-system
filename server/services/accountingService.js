@@ -4,11 +4,12 @@ const { getDbType } = require('./db-adapter');
 // Helper to get database connection
 const db = () => getDatabase();
 
-// Helper to check if database is async (Postgres)
+// Helper to check if database is async (Postgres/Neon)
 const isAsyncDb = () => {
   try {
     const dbType = getDbType();
-    return dbType === 'postgres' || dbType === 'supabase';
+    // Neon, Vercel Postgres, and Supabase are all async
+    return dbType === 'neon' || dbType === 'postgres' || dbType === 'supabase';
   } catch {
     return false;
   }
@@ -112,20 +113,40 @@ const addAccount = async (account) => {
   // Check if code already exists
   const checkQuery = 'SELECT code, name, type FROM chart_of_accounts WHERE code = ?';
   console.log(`[addAccount] Checking if account ${code} exists with query: ${checkQuery}`);
-  const existingPromise = database.prepare(checkQuery).get(code);
-  const existing = isAsyncDb() ? await existingPromise : existingPromise;
+  
+  // Prepare statement and execute query
+  const existingStmt = database.prepare(checkQuery);
+  const existingPromise = existingStmt.get(code);
+  
+  // Always await - for Neon it's a promise, for SQLite it's a value
+  let existing;
+  if (isAsyncDb()) {
+    // Neon returns a promise, must await
+    existing = await existingPromise;
+  } else {
+    // SQLite returns value directly
+    existing = existingPromise;
+  }
   
   console.log(`[addAccount] Existing account check result:`, existing);
+  console.log(`[addAccount] Existing is truthy:`, !!existing);
+  console.log(`[addAccount] Existing type:`, typeof existing);
+  if (existing) {
+    console.log(`[addAccount] Existing value:`, JSON.stringify(existing));
+  }
   
   if (existing) {
     console.log(`[addAccount] Account ${code} already exists in database:`, existing);
     
     // Also check all accounts to see what's in the database
-    const allAccountsPromise = database.prepare('SELECT code, name, type FROM chart_of_accounts ORDER BY code').all();
-    const allAccounts = isAsyncDb() ? await allAccountsPromise : allAccountsPromise;
-    console.log(`[addAccount] Total accounts in database:`, Array.isArray(allAccounts) ? allAccounts.length : 0);
-    if (Array.isArray(allAccounts) && allAccounts.length > 0) {
-      console.log(`[addAccount] First few accounts:`, allAccounts.slice(0, 5));
+    const allAccountsStmt = database.prepare('SELECT code, name, type FROM chart_of_accounts ORDER BY code');
+    const allAccountsPromise = allAccountsStmt.all();
+    const allAccounts = await runQuery(() => allAccountsPromise);
+    
+    const allAccountsArray = Array.isArray(allAccounts) ? allAccounts : [];
+    console.log(`[addAccount] Total accounts in database:`, allAccountsArray.length);
+    if (allAccountsArray.length > 0) {
+      console.log(`[addAccount] First few accounts:`, allAccountsArray.slice(0, 5));
     }
     
     throw new Error(`Account code ${code} already exists`);
@@ -143,8 +164,9 @@ const addAccount = async (account) => {
     console.log(`[addAccount] Insert result:`, result);
     
     // Verify the account was inserted
-    const verifyPromise = database.prepare('SELECT * FROM chart_of_accounts WHERE code = ?').get(code);
-    const verified = isAsyncDb() ? await verifyPromise : verifyPromise;
+    const verifyStmt = database.prepare('SELECT * FROM chart_of_accounts WHERE code = ?');
+    const verifyPromise = verifyStmt.get(code);
+    const verified = await runQuery(() => verifyPromise);
     console.log(`[addAccount] Verified account exists:`, verified ? 'YES' : 'NO');
     
     return { code, name, type, isContra: isContra || false };

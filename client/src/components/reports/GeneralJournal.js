@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import axios from 'axios';
 import '../../App.css';
 import TransactionForm from '../TransactionForm';
@@ -15,6 +15,12 @@ const formatCurrency = (amount) => {
 const GeneralJournal = ({ transactions, onRefresh }) => {
   const [showForm, setShowForm] = useState(false);
   const [editingTransaction, setEditingTransaction] = useState(null);
+  const [localTransactions, setLocalTransactions] = useState([]);
+
+  // Sync local state with props for real-time updates
+  useEffect(() => {
+    setLocalTransactions(transactions);
+  }, [transactions]);
 
   const handleAddClick = () => {
     setEditingTransaction(null);
@@ -28,12 +34,20 @@ const GeneralJournal = ({ transactions, onRefresh }) => {
 
   const handleDeleteClick = async (transactionId) => {
     if (window.confirm('Apakah Anda yakin ingin menghapus transaksi ini?')) {
+      // Optimistically remove from UI immediately (real-time update)
+      setLocalTransactions(prev => prev.filter(t => t.id !== transactionId));
+      
       try {
         await axios.delete(`${API_URL}/api/accounting/transactions/${transactionId}`);
+        // Refresh to sync with server and update other components
         if (onRefresh) {
           onRefresh();
         }
       } catch (error) {
+        // On error, restore the transaction and show error
+        if (onRefresh) {
+          onRefresh(); // Refresh to get correct state from server
+        }
         alert('Gagal menghapus transaksi: ' + (error.response?.data?.error || error.message));
       }
     }
@@ -85,7 +99,7 @@ const GeneralJournal = ({ transactions, onRefresh }) => {
             </tr>
           </thead>
           <tbody>
-            {transactions.map((transaction, idx) => (
+            {localTransactions.map((transaction, idx) => (
               <React.Fragment key={transaction.id || idx}>
                 <tr>
                   <td rowSpan={transaction.entries.length} className="text-center">

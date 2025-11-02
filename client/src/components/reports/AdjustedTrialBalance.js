@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import axios from 'axios';
 import '../../App.css';
 import TransactionForm from '../TransactionForm';
@@ -16,6 +16,12 @@ const AdjustedTrialBalance = ({ reports, adjustingEntries, onRefresh }) => {
   const [showAdjustingForm, setShowAdjustingForm] = useState(false);
   const [editingEntry, setEditingEntry] = useState(null);
   const [view, setView] = useState('report'); // 'report' or 'adjusting'
+  const [localAdjustingEntries, setLocalAdjustingEntries] = useState([]);
+
+  // Sync local state with props for real-time updates
+  useEffect(() => {
+    setLocalAdjustingEntries(adjustingEntries || []);
+  }, [adjustingEntries]);
 
   const handleAddAdjustingClick = () => {
     setEditingEntry(null);
@@ -29,12 +35,20 @@ const AdjustedTrialBalance = ({ reports, adjustingEntries, onRefresh }) => {
 
   const handleDeleteAdjustingClick = async (entryId) => {
     if (window.confirm('Apakah Anda yakin ingin menghapus jurnal penyesuaian ini?')) {
+      // Optimistically remove from UI immediately (real-time update)
+      setLocalAdjustingEntries(prev => prev.filter(e => e.id !== entryId));
+      
       try {
         await axios.delete(`${API_URL}/api/accounting/adjusting-entries/${entryId}`);
+        // Refresh to sync with server and update other components
         if (onRefresh) {
           onRefresh();
         }
       } catch (error) {
+        // On error, restore the entry and show error
+        if (onRefresh) {
+          onRefresh(); // Refresh to get correct state from server
+        }
         alert('Gagal menghapus jurnal penyesuaian: ' + (error.response?.data?.error || error.message));
       }
     }
@@ -62,11 +76,11 @@ const AdjustedTrialBalance = ({ reports, adjustingEntries, onRefresh }) => {
 
   const renderReport = () => (
     <>
-      {adjustingEntries && adjustingEntries.length > 0 && (
+      {localAdjustingEntries && localAdjustingEntries.length > 0 && (
         <div style={{ marginBottom: '20px', padding: '15px', backgroundColor: '#fff9e6', borderRadius: '6px', border: '1px solid #ffd700' }}>
           <h3 style={{ marginBottom: '10px', color: '#b8860b' }}>Jurnal Penyesuaian:</h3>
           <ul style={{ marginLeft: '20px' }}>
-            {adjustingEntries.map((adj, idx) => (
+            {localAdjustingEntries.map((adj, idx) => (
               <li key={adj.id || idx} style={{ marginBottom: '5px' }}>
                 {adj.description} - {formatCurrency(adj.entries[0].debit || adj.entries[0].credit)}
               </li>
@@ -145,7 +159,7 @@ const AdjustedTrialBalance = ({ reports, adjustingEntries, onRefresh }) => {
             </tr>
           </thead>
           <tbody>
-            {adjustingEntries && adjustingEntries.map((entry, idx) => (
+            {localAdjustingEntries && localAdjustingEntries.map((entry, idx) => (
               <React.Fragment key={entry.id || idx}>
                 <tr>
                   <td rowSpan={entry.entries.length} className="text-center">

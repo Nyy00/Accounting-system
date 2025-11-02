@@ -147,7 +147,10 @@ const addAccount = (account) => {
   chartOfAccounts[category].push(newAccount);
   
   // Save to file
-  writeJsonFile(COA_FILE, chartOfAccounts);
+  const saved = writeJsonFile(COA_FILE, chartOfAccounts);
+  if (!saved) {
+    throw new Error('Failed to save account to file');
+  }
   
   return newAccount;
 };
@@ -204,7 +207,10 @@ const updateAccount = (code, account) => {
   }
   
   // Save to file
-  writeJsonFile(COA_FILE, chartOfAccounts);
+  const saved = writeJsonFile(COA_FILE, chartOfAccounts);
+  if (!saved) {
+    throw new Error('Failed to save account update to file');
+  }
   
   return { code, name, type, isContra: isContra || false };
 };
@@ -229,7 +235,10 @@ const deleteAccount = (code) => {
   }
   
   // Save to file
-  writeJsonFile(COA_FILE, chartOfAccounts);
+  const saved = writeJsonFile(COA_FILE, chartOfAccounts);
+  if (!saved) {
+    throw new Error('Failed to save account deletion to file');
+  }
   
   return true;
 };

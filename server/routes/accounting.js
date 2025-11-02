@@ -30,7 +30,9 @@ router.get('/chart-of-accounts', (req, res) => {
 router.post('/accounts', (req, res) => {
   try {
     const account = addAccount(req.body);
-    res.json(account);
+    // Return the updated chart of accounts so client can update immediately
+    const chartOfAccounts = getChartOfAccounts();
+    res.json({ account, chartOfAccounts });
   } catch (error) {
     res.status(400).json({ error: error.message });
   }
@@ -41,7 +43,9 @@ router.put('/accounts/:code', (req, res) => {
   try {
     const code = decodeURIComponent(req.params.code);
     const account = updateAccount(code, req.body);
-    res.json(account);
+    // Return the updated chart of accounts so client can update immediately
+    const chartOfAccounts = getChartOfAccounts();
+    res.json({ account, chartOfAccounts });
   } catch (error) {
     res.status(400).json({ error: error.message });
   }
@@ -52,7 +56,9 @@ router.delete('/accounts/:code', (req, res) => {
   try {
     const code = decodeURIComponent(req.params.code);
     deleteAccount(code);
-    res.json({ success: true });
+    // Return the updated chart of accounts so client can update immediately
+    const chartOfAccounts = getChartOfAccounts();
+    res.json({ success: true, chartOfAccounts });
   } catch (error) {
     res.status(400).json({ error: error.message });
   }

@@ -58,9 +58,18 @@ const ChartOfAccounts = ({ onRefresh }) => {
   const handleDeleteClick = async (code) => {
     if (window.confirm('Apakah Anda yakin ingin menghapus akun ini?')) {
       try {
-        await axios.delete(`${API_URL}/api/accounting/accounts/${encodeURIComponent(code)}`);
+        const response = await axios.delete(`${API_URL}/api/accounting/accounts/${encodeURIComponent(code)}`);
         removeAccountCache(code);
-        fetchAccounts();
+        
+        // Update state directly from response if available, otherwise fetch
+        if (response.data && response.data.chartOfAccounts) {
+          setChartOfAccounts(response.data.chartOfAccounts);
+          initializeAccountCache(response.data.chartOfAccounts);
+        } else {
+          // Fallback to fetching if response doesn't have chartOfAccounts
+          fetchAccounts();
+        }
+        
         // Refresh parent component to update account cache everywhere
         if (onRefresh) {
           onRefresh();
@@ -74,9 +83,10 @@ const ChartOfAccounts = ({ onRefresh }) => {
   const handleFormSubmit = async (e) => {
     e.preventDefault();
     try {
+      let response;
       if (editingAccount) {
         // Update
-        await axios.put(`${API_URL}/api/accounting/accounts/${encodeURIComponent(formData.code)}`, {
+        response = await axios.put(`${API_URL}/api/accounting/accounts/${encodeURIComponent(formData.code)}`, {
           name: formData.name,
           type: formData.type,
           isContra: formData.isContra
@@ -84,12 +94,22 @@ const ChartOfAccounts = ({ onRefresh }) => {
         updateAccountCache(formData.code, formData.name);
       } else {
         // Add new
-        await axios.post(`${API_URL}/api/accounting/accounts`, formData);
+        response = await axios.post(`${API_URL}/api/accounting/accounts`, formData);
         updateAccountCache(formData.code, formData.name);
       }
+      
+      // Update state directly from response if available, otherwise fetch
+      if (response.data && response.data.chartOfAccounts) {
+        setChartOfAccounts(response.data.chartOfAccounts);
+        initializeAccountCache(response.data.chartOfAccounts);
+      } else {
+        // Fallback to fetching if response doesn't have chartOfAccounts
+        fetchAccounts();
+      }
+      
       setShowForm(false);
       setEditingAccount(null);
-      fetchAccounts();
+      
       // Refresh parent component to update account cache everywhere
       if (onRefresh) {
         onRefresh();

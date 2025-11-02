@@ -269,7 +269,7 @@ const createPostgresWrapper = () => {
         exec: async (sql) => {
           const client = await getClient();
           await client.sql.query(sql);
-        })
+        }
       };
     },
     exec: async (sql) => {

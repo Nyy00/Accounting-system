@@ -203,11 +203,14 @@ const getTransactions = async () => {
     `).all();
     const transactions = isAsyncDb() ? await transactionsPromise : transactionsPromise;
     
-    if (!transactions || transactions.length === 0) {
+    // Ensure transactions is an array
+    const transactionsArray = Array.isArray(transactions) ? transactions : [];
+    
+    if (!transactionsArray || transactionsArray.length === 0) {
       return [];
     }
     
-    const result = await Promise.all(transactions.map(async (trans) => {
+    const result = await Promise.all(transactionsArray.map(async (trans) => {
       const entriesPromise = database.prepare(`
         SELECT account_code as account, debit, credit
         FROM transaction_entries
@@ -408,11 +411,14 @@ const getAdjustingEntries = async () => {
     `).all();
     const entries = isAsyncDb() ? await entriesPromise : entriesPromise;
     
-    if (!entries || entries.length === 0) {
+    // Ensure entries is an array
+    const entriesArray = Array.isArray(entries) ? entries : [];
+    
+    if (!entriesArray || entriesArray.length === 0) {
       return [];
     }
     
-    const result = await Promise.all(entries.map(async (entry) => {
+    const result = await Promise.all(entriesArray.map(async (entry) => {
       const entryEntriesPromise = database.prepare(`
         SELECT account_code as account, debit, credit
         FROM adjusting_entry_entries

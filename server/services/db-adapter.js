@@ -56,14 +56,15 @@ if (process.env.DATABASE_URL && process.env.DATABASE_URL.includes('neon.tech')) 
                 const insertMatch = convertedQuery.match(/INSERT INTO\s+(\w+)/i);
                 if (insertMatch) {
                   const tableName = insertMatch[1];
-                  // Only add RETURNING id for tables that have id column (not chart_of_accounts)
-                  // Tables with id: transactions, adjusting_entries, transaction_entries, adjusting_entry_entries, metadata
-                  // Tables WITHOUT id: chart_of_accounts (uses code as primary key)
-                  if (tableName !== 'chart_of_accounts') {
+                  // Only add RETURNING id for tables that have id column
+                  // Tables with id: transactions, adjusting_entries, transaction_entries, adjusting_entry_entries
+                  // Tables WITHOUT id: chart_of_accounts (uses code as primary key), metadata (uses key as primary key)
+                  const tablesWithoutId = ['chart_of_accounts', 'metadata'];
+                  if (!tablesWithoutId.includes(tableName)) {
                     modifiedQuery = convertedQuery + ' RETURNING id';
                     console.log(`[Neon] Modified INSERT query to include RETURNING id for table: ${tableName}`);
                   } else {
-                    console.log(`[Neon] Skipping RETURNING id for table: ${tableName} (uses code as primary key)`);
+                    console.log(`[Neon] Skipping RETURNING id for table: ${tableName} (uses ${tableName === 'chart_of_accounts' ? 'code' : 'key'} as primary key)`);
                   }
                 }
               }

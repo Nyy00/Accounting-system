@@ -388,12 +388,18 @@ const postgresMethods = {
   
   async run(sql, params = []) {
     // For INSERT queries, append RETURNING id to get the inserted ID
+    // BUT only for tables that have id column
     let modifiedSql = sql;
     if (sql.toUpperCase().includes('INSERT') && !sql.toUpperCase().includes('RETURNING')) {
-      // Extract table name and append RETURNING id
+      // Extract table name
       const insertMatch = sql.match(/INSERT INTO\s+(\w+)/i);
       if (insertMatch) {
-        modifiedSql = sql + ' RETURNING id';
+        const tableName = insertMatch[1];
+        // Tables WITHOUT id column: chart_of_accounts (uses code), metadata (uses key)
+        const tablesWithoutId = ['chart_of_accounts', 'metadata'];
+        if (!tablesWithoutId.includes(tableName)) {
+          modifiedSql = sql + ' RETURNING id';
+        }
       }
     }
     

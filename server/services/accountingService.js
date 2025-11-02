@@ -110,11 +110,24 @@ const addAccount = async (account) => {
   const database = db();
   
   // Check if code already exists
-  const existingPromise = database.prepare('SELECT code FROM chart_of_accounts WHERE code = ?').get(code);
+  const checkQuery = 'SELECT code, name, type FROM chart_of_accounts WHERE code = ?';
+  console.log(`[addAccount] Checking if account ${code} exists with query: ${checkQuery}`);
+  const existingPromise = database.prepare(checkQuery).get(code);
   const existing = isAsyncDb() ? await existingPromise : existingPromise;
   
+  console.log(`[addAccount] Existing account check result:`, existing);
+  
   if (existing) {
-    console.log(`[addAccount] Account ${code} already exists in database`);
+    console.log(`[addAccount] Account ${code} already exists in database:`, existing);
+    
+    // Also check all accounts to see what's in the database
+    const allAccountsPromise = database.prepare('SELECT code, name, type FROM chart_of_accounts ORDER BY code').all();
+    const allAccounts = isAsyncDb() ? await allAccountsPromise : allAccountsPromise;
+    console.log(`[addAccount] Total accounts in database:`, Array.isArray(allAccounts) ? allAccounts.length : 0);
+    if (Array.isArray(allAccounts) && allAccounts.length > 0) {
+      console.log(`[addAccount] First few accounts:`, allAccounts.slice(0, 5));
+    }
+    
     throw new Error(`Account code ${code} already exists`);
   }
   

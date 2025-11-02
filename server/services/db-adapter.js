@@ -86,11 +86,21 @@ if (process.env.DATABASE_URL && process.env.DATABASE_URL.includes('neon.tech')) 
             }
           },
           get: async (...params) => {
+            console.log(`[Neon] Executing GET query: ${convertedQuery.substring(0, 100)}...`);
+            console.log(`[Neon] GET params:`, params);
             const results = await sql(convertedQuery, params);
+            console.log(`[Neon] GET result:`, results?.[0] || null, `(total: ${results?.length || 0} rows)`);
             return results[0] || null;
           },
           all: async (...params) => {
-            return await sql(convertedQuery, params);
+            console.log(`[Neon] Executing ALL query: ${convertedQuery.substring(0, 100)}...`);
+            console.log(`[Neon] ALL params:`, params);
+            const results = await sql(convertedQuery, params);
+            console.log(`[Neon] ALL result:`, `${results?.length || 0} rows returned`);
+            if (results && results.length > 0) {
+              console.log(`[Neon] First row:`, results[0]);
+            }
+            return results;
           }
         };
       },

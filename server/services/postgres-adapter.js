@@ -113,11 +113,16 @@ const initializeSchema = async () => {
         ON adjusting_entry_entries(account_code)
       `);
       
-      console.log('✅ Neon schema initialized');
+      console.log('✅ Neon schema initialized successfully');
       return;
     } catch (error) {
-      if (!error.message.includes('already exists')) {
-        console.error('Error creating Neon schema:', error);
+      // Log all errors, but don't fail if table already exists
+      if (error.message && error.message.includes('already exists')) {
+        console.log('✅ Neon schema already exists');
+      } else {
+        console.error('❌ Error creating Neon schema:', error.message || error);
+        // Re-throw to let caller know schema init failed
+        throw error;
       }
       return;
     }

@@ -25,14 +25,8 @@ const runQuery = async (queryFn) => {
 
 // Chart of Accounts - Get all accounts grouped by type
 const getChartOfAccounts = async () => {
-  const database = db();
-  const accountsPromise = database.prepare('SELECT * FROM chart_of_accounts ORDER BY code').all();
-  const accounts = isAsyncDb() ? await accountsPromise : accountsPromise;
-  
-  // Ensure accounts is an array
-  const accountsArray = Array.isArray(accounts) ? accounts : [];
-  
-  const result = {
+  // Always return a valid structure
+  const defaultResult = {
     assets: [],
     liabilities: [],
     equity: [],
@@ -40,34 +34,58 @@ const getChartOfAccounts = async () => {
     expenses: []
   };
   
-  accountsArray.forEach(acc => {
-    const account = {
-      code: acc.code,
-      name: acc.name,
-      type: acc.type,
-      isContra: acc.is_contra === 1
+  try {
+    const database = db();
+    const accountsPromise = database.prepare('SELECT * FROM chart_of_accounts ORDER BY code').all();
+    const accounts = isAsyncDb() ? await accountsPromise : accountsPromise;
+    
+    // Ensure accounts is an array
+    const accountsArray = Array.isArray(accounts) ? accounts : [];
+    
+    const result = {
+      assets: [],
+      liabilities: [],
+      equity: [],
+      revenue: [],
+      expenses: []
     };
     
-    switch (acc.type) {
-      case 'asset':
-        result.assets.push(account);
-        break;
-      case 'liability':
-        result.liabilities.push(account);
-        break;
-      case 'equity':
-        result.equity.push(account);
-        break;
-      case 'revenue':
-        result.revenue.push(account);
-        break;
-      case 'expense':
-        result.expenses.push(account);
-        break;
-    }
-  });
-  
-  return result;
+    accountsArray.forEach(acc => {
+      if (!acc || !acc.code || !acc.name || !acc.type) {
+        return; // Skip invalid entries
+      }
+      
+      const account = {
+        code: acc.code,
+        name: acc.name,
+        type: acc.type,
+        isContra: acc.is_contra === 1 || acc.is_contra === true
+      };
+      
+      switch (acc.type) {
+        case 'asset':
+          result.assets.push(account);
+          break;
+        case 'liability':
+          result.liabilities.push(account);
+          break;
+        case 'equity':
+          result.equity.push(account);
+          break;
+        case 'revenue':
+          result.revenue.push(account);
+          break;
+        case 'expense':
+          result.expenses.push(account);
+          break;
+      }
+    });
+    
+    return result;
+  } catch (error) {
+    console.error('Error getting chart of accounts:', error);
+    return defaultResult;
+  }
 };
 
 // CRUD Operations for Chart of Accounts
@@ -585,16 +603,37 @@ const deleteAdjustingEntry = async (id) => {
 
 // Calculate all account balances
 const calculateAccountBalances = async () => {
-  const accounts = await getChartOfAccounts();
-  const transactions = await getTransactions();
-  const adjustments = await getAdjustingEntries();
+  let accounts, transactions, adjustments;
+  
+  try {
+    accounts = await getChartOfAccounts();
+    transactions = await getTransactions();
+    adjustments = await getAdjustingEntries();
+  } catch (error) {
+    console.error('Error fetching data for balance calculation:', error);
+    accounts = { assets: [], liabilities: [], equity: [], revenue: [], expenses: [] };
+    transactions = [];
+    adjustments = [];
+  }
+  
+  // Ensure accounts has valid structure
+  if (!accounts || typeof accounts !== 'object') {
+    accounts = { assets: [], liabilities: [], equity: [], revenue: [], expenses: [] };
+  }
+  
+  // Ensure arrays exist
+  const assets = Array.isArray(accounts.assets) ? accounts.assets : [];
+  const liabilities = Array.isArray(accounts.liabilities) ? accounts.liabilities : [];
+  const equity = Array.isArray(accounts.equity) ? accounts.equity : [];
+  const revenue = Array.isArray(accounts.revenue) ? accounts.revenue : [];
+  const expenses = Array.isArray(accounts.expenses) ? accounts.expenses : [];
   
   const allAccounts = [
-    ...(accounts.assets || []),
-    ...(accounts.liabilities || []),
-    ...(accounts.equity || []),
-    ...(accounts.revenue || []),
-    ...(accounts.expenses || [])
+    ...assets,
+    ...liabilities,
+    ...equity,
+    ...revenue,
+    ...expenses
   ];
   
   const balances = {};

@@ -38,3 +38,4 @@ build/
 # Data files (persistent storage)
 data/
 /tmp/data/
+**/data/

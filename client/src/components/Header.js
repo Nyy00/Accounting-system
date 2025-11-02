@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import axios from 'axios';
 import API_URL from '../config';
 import MetadataEditor from './MetadataEditor';
@@ -9,11 +9,7 @@ const Header = ({ onMetadataChange }) => {
   const [showEditor, setShowEditor] = useState(false);
   const [loading, setLoading] = useState(true);
 
-  useEffect(() => {
-    fetchMetadata();
-  }, []);
-
-  const fetchMetadata = async () => {
+  const fetchMetadata = useCallback(async () => {
     try {
       const response = await axios.get(`${API_URL}/api/accounting/metadata`);
       setMetadata(response.data);
@@ -25,7 +21,11 @@ const Header = ({ onMetadataChange }) => {
       console.error('Error fetching metadata:', error);
       setLoading(false);
     }
-  };
+  }, [onMetadataChange]);
+
+  useEffect(() => {
+    fetchMetadata();
+  }, [fetchMetadata]);
 
   const handleSave = async (updatedMetadata) => {
     setMetadata(updatedMetadata);

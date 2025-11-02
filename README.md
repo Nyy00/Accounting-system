@@ -4,6 +4,8 @@ Aplikasi web untuk membuat laporan akuntansi lengkap (S1-S7) berdasarkan data tr
 
 ## Fitur
 
+### Laporan Akuntansi (S1-S7)
+
 - **S1 - Jurnal Umum**: Pencatatan semua transaksi dalam bentuk jurnal
 - **S2 - Buku Besar**: Buku besar untuk setiap akun dengan saldo berjalan
 - **S3 - Neraca Saldo**: Daftar saldo sebelum penyesuaian
@@ -11,6 +13,16 @@ Aplikasi web untuk membuat laporan akuntansi lengkap (S1-S7) berdasarkan data tr
 - **S5 - Laporan Laba Rugi**: Laporan pendapatan dan beban
 - **S6 - Laporan Posisi Keuangan**: Neraca (Aktiva, Kewajiban, Ekuitas)
 - **S7 - Laporan Perubahan Ekuitas**: Perubahan ekuitas selama periode
+
+### Fitur Input Manual (NEW! 🎉)
+
+- ✅ **Tambah Transaksi Baru**: Input jurnal umum secara manual
+- ✅ **Edit Transaksi**: Ubah transaksi yang sudah ada
+- ✅ **Hapus Transaksi**: Hapus transaksi yang salah
+- ✅ **Tambah Jurnal Penyesuaian**: Input adjusting entries
+- ✅ **Edit/Hapus Jurnal Penyesuaian**: Kelola jurnal penyesuaian
+- ✅ **Validasi Otomatis**: Sistem memastikan Debit = Kredit
+- ✅ **Update Real-time**: Semua laporan otomatis terupdate
 
 ## Teknologi
 
@@ -95,6 +107,30 @@ Plus jurnal penyesuaian untuk:
 - Depresiasi kendaraan (Rp1,6 juta)
 - Pemakaian perlengkapan (Rp2 juta)
 - Beban sewa untuk Januari (Rp2 juta)
+
+## Cara Menggunakan Input Manual
+
+### 1. Input Jurnal Umum (S1)
+
+1. Buka halaman **S1 - Jurnal Umum**
+2. Klik **"+ Tambah Transaksi"**
+3. Isi form dengan data transaksi Anda
+4. Pastikan **Total Debit = Total Kredit**
+5. Klik **"Simpan"**
+
+### 2. Input Jurnal Penyesuaian (S4)
+
+1. Buka halaman **S4 - Neraca Saldo Setelah Penyesuaian**
+2. Klik **"Kelola Jurnal Penyesuaian"**
+3. Klik **"+ Tambah Jurnal Penyesuaian"**
+4. Isi form dan klik **"Simpan"**
+
+**Catatan Penting:**
+- Semua laporan (S1-S7) akan **otomatis terupdate** setelah input
+- Sistem validasi memastikan **Debit = Kredit**
+- Minimal 2 akun untuk setiap transaksi
+
+📖 **Lihat panduan lengkap**: [MANUAL_INPUT_GUIDE.md](MANUAL_INPUT_GUIDE.md)
 
 ## Fitur Rumus
 

@@ -1,5 +1,8 @@
-import React from 'react';
+import React, { useState } from 'react';
+import axios from 'axios';
 import '../../App.css';
+import TransactionForm from '../TransactionForm';
+import API_URL from '../../config';
 
 const formatCurrency = (amount) => {
   return new Intl.NumberFormat('id-ID', {
@@ -9,7 +12,47 @@ const formatCurrency = (amount) => {
   }).format(amount);
 };
 
-const AdjustedTrialBalance = ({ reports, adjustingEntries }) => {
+const AdjustedTrialBalance = ({ reports, adjustingEntries, onRefresh }) => {
+  const [showAdjustingForm, setShowAdjustingForm] = useState(false);
+  const [editingEntry, setEditingEntry] = useState(null);
+  const [view, setView] = useState('report'); // 'report' or 'adjusting'
+
+  const handleAddAdjustingClick = () => {
+    setEditingEntry(null);
+    setShowAdjustingForm(true);
+  };
+
+  const handleEditAdjustingClick = (entry) => {
+    setEditingEntry(entry);
+    setShowAdjustingForm(true);
+  };
+
+  const handleDeleteAdjustingClick = async (entryId) => {
+    if (window.confirm('Apakah Anda yakin ingin menghapus jurnal penyesuaian ini?')) {
+      try {
+        await axios.delete(`${API_URL}/api/accounting/adjusting-entries/${entryId}`);
+        if (onRefresh) {
+          onRefresh();
+        }
+      } catch (error) {
+        alert('Gagal menghapus jurnal penyesuaian: ' + (error.response?.data?.error || error.message));
+      }
+    }
+  };
+
+  const handleFormClose = () => {
+    setShowAdjustingForm(false);
+    setEditingEntry(null);
+  };
+
+  const handleFormSave = () => {
+    setShowAdjustingForm(false);
+    setEditingEntry(null);
+    if (onRefresh) {
+      onRefresh();
+    }
+  };
+
   if (!reports || !reports.adjustedTrialBalance) {
     return <div>Memuat data...</div>;
   }
@@ -17,17 +60,14 @@ const AdjustedTrialBalance = ({ reports, adjustingEntries }) => {
   const totalDebit = reports.adjustedTrialBalance.reduce((sum, acc) => sum + acc.debit, 0);
   const totalCredit = reports.adjustedTrialBalance.reduce((sum, acc) => sum + acc.credit, 0);
 
-  return (
-    <div>
-      <h2 className="report-title">S4 - NERACA SALDO SETELAH PENYESUAIAN</h2>
-      <p className="report-subtitle">Periode: Januari 2024</p>
-      
+  const renderReport = () => (
+    <>
       {adjustingEntries && adjustingEntries.length > 0 && (
         <div style={{ marginBottom: '20px', padding: '15px', backgroundColor: '#fff9e6', borderRadius: '6px', border: '1px solid #ffd700' }}>
           <h3 style={{ marginBottom: '10px', color: '#b8860b' }}>Jurnal Penyesuaian:</h3>
           <ul style={{ marginLeft: '20px' }}>
             {adjustingEntries.map((adj, idx) => (
-              <li key={idx} style={{ marginBottom: '5px' }}>
+              <li key={adj.id || idx} style={{ marginBottom: '5px' }}>
                 {adj.description} - {formatCurrency(adj.entries[0].debit || adj.entries[0].credit)}
               </li>
             ))}
@@ -71,6 +111,128 @@ const AdjustedTrialBalance = ({ reports, adjustingEntries }) => {
         <br />
         <strong>Catatan:</strong> Seluruh saldo setelah penyesuaian akan digunakan untuk membuat Laporan Laba Rugi dan Laporan Posisi Keuangan.
       </div>
+    </>
+  );
+
+  const renderAdjustingEntries = () => (
+    <>
+      <div className="action-buttons">
+        <button onClick={handleAddAdjustingClick} className="btn-primary">
+          + Tambah Jurnal Penyesuaian
+        </button>
+      </div>
+
+      {showAdjustingForm && (
+        <TransactionForm
+          editingTransaction={editingEntry}
+          onSave={handleFormSave}
+          onCancel={handleFormClose}
+          type="adjusting"
+        />
+      )}
+
+      <div className="table-container">
+        <table className="accounting-table">
+          <thead>
+            <tr>
+              <th style={{ width: '80px' }}>Tanggal</th>
+              <th style={{ width: '250px' }}>Keterangan</th>
+              <th style={{ width: '120px' }}>Akun</th>
+              <th style={{ width: '250px' }}>Nama Akun</th>
+              <th style={{ width: '150px' }}>Debit (Rp)</th>
+              <th style={{ width: '150px' }}>Kredit (Rp)</th>
+              <th style={{ width: '120px' }}>Aksi</th>
+            </tr>
+          </thead>
+          <tbody>
+            {adjustingEntries && adjustingEntries.map((entry, idx) => (
+              <React.Fragment key={entry.id || idx}>
+                <tr>
+                  <td rowSpan={entry.entries.length} className="text-center">
+                    {new Date(entry.date).toLocaleDateString('id-ID', {
+                      day: '2-digit',
+                      month: '2-digit',
+                      year: 'numeric'
+                    })}
+                  </td>
+                  <td rowSpan={entry.entries.length}>
+                    {entry.description}
+                  </td>
+                  <td className="text-center">{entry.entries[0].account}</td>
+                  <td>{getAccountName(entry.entries[0].account)}</td>
+                  <td className="number">{entry.entries[0].debit > 0 ? formatCurrency(entry.entries[0].debit) : ''}</td>
+                  <td className="number">{entry.entries[0].credit > 0 ? formatCurrency(entry.entries[0].credit) : ''}</td>
+                  <td rowSpan={entry.entries.length} className="text-center">
+                    <button onClick={() => handleEditAdjustingClick(entry)} className="btn-edit">
+                      Edit
+                    </button>
+                    <button onClick={() => handleDeleteAdjustingClick(entry.id)} className="btn-delete">
+                      Hapus
+                    </button>
+                  </td>
+                </tr>
+                {entry.entries.slice(1).map((e, entryIdx) => (
+                  <tr key={entryIdx}>
+                    <td className="text-center">{e.account}</td>
+                    <td>{getAccountName(e.account)}</td>
+                    <td className="number">{e.debit > 0 ? formatCurrency(e.debit) : ''}</td>
+                    <td className="number">{e.credit > 0 ? formatCurrency(e.credit) : ''}</td>
+                  </tr>
+                ))}
+              </React.Fragment>
+            ))}
+          </tbody>
+        </table>
+      </div>
+    </>
+  );
+
+  const getAccountName = (code) => {
+    const accounts = {
+      '1-100': 'Kas kecil',
+      '1-110': 'Bank',
+      '1-140': 'Perlengkapan Kantor',
+      '1-150': 'Sewa dibayar dimuka',
+      '1-230': 'Kendaraan',
+      '1-240': 'Akumulasi Penyusutan Kendaraan',
+      '2-110': 'Utang Gaji',
+      '2-120': 'Utang lain-lain',
+      '2-130': 'Pendapatan Diterima di Muka',
+      '2-210': 'Utang Bank',
+      '3-101': 'Modal Amin',
+      '3-102': 'Modal Fawzi',
+      '3-200': 'Laba ditahan',
+      '4-100': 'Pendapatan',
+      '5-100': 'Beban Gaji',
+      '5-110': 'Beban Sewa Kantor',
+      '5-120': 'Beban Listrik, Air, Internet dan lain-lain',
+      '5-130': 'Beban penyusutan kendaraan'
+    };
+    return accounts[code] || code;
+  };
+
+  return (
+    <div>
+      <h2 className="report-title">S4 - NERACA SALDO SETELAH PENYESUAIAN</h2>
+      <p className="report-subtitle">Periode: Januari 2024</p>
+      
+      <div className="action-buttons">
+        <button 
+          onClick={() => setView('adjusting')} 
+          className={view === 'adjusting' ? 'btn-primary' : 'btn-secondary'}
+          style={{ marginRight: '10px' }}
+        >
+          Kelola Jurnal Penyesuaian
+        </button>
+        <button 
+          onClick={() => setView('report')} 
+          className={view === 'report' ? 'btn-primary' : 'btn-secondary'}
+        >
+          Lihat Laporan
+        </button>
+      </div>
+
+      {view === 'report' ? renderReport() : renderAdjustingEntries()}
     </div>
   );
 };

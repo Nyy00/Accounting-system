@@ -48,13 +48,13 @@ function App() {
 
     switch (activeReport) {
       case 's1':
-        return <GeneralJournal transactions={transactions} />;
+        return <GeneralJournal transactions={transactions} onRefresh={fetchData} />;
       case 's2':
         return <GeneralLedger transactions={transactions} adjustingEntries={adjustingEntries} />;
       case 's3':
         return <TrialBalance reports={reports} />;
       case 's4':
-        return <AdjustedTrialBalance reports={reports} adjustingEntries={adjustingEntries} />;
+        return <AdjustedTrialBalance reports={reports} adjustingEntries={adjustingEntries} onRefresh={fetchData} />;
       case 's5':
         return <IncomeStatement reports={reports} />;
       case 's6':
@@ -62,7 +62,7 @@ function App() {
       case 's7':
         return <ChangesInEquity reports={reports} />;
       default:
-        return <GeneralJournal transactions={transactions} />;
+        return <GeneralJournal transactions={transactions} onRefresh={fetchData} />;
     }
   };
 

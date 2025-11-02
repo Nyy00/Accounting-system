@@ -1,5 +1,8 @@
-import React from 'react';
+import React, { useState } from 'react';
+import axios from 'axios';
 import '../../App.css';
+import TransactionForm from '../TransactionForm';
+import API_URL from '../../config';
 
 const formatCurrency = (amount) => {
   return new Intl.NumberFormat('id-ID', {
@@ -9,11 +12,64 @@ const formatCurrency = (amount) => {
   }).format(amount);
 };
 
-const GeneralJournal = ({ transactions }) => {
+const GeneralJournal = ({ transactions, onRefresh }) => {
+  const [showForm, setShowForm] = useState(false);
+  const [editingTransaction, setEditingTransaction] = useState(null);
+
+  const handleAddClick = () => {
+    setEditingTransaction(null);
+    setShowForm(true);
+  };
+
+  const handleEditClick = (transaction) => {
+    setEditingTransaction(transaction);
+    setShowForm(true);
+  };
+
+  const handleDeleteClick = async (transactionId) => {
+    if (window.confirm('Apakah Anda yakin ingin menghapus transaksi ini?')) {
+      try {
+        await axios.delete(`${API_URL}/api/accounting/transactions/${transactionId}`);
+        if (onRefresh) {
+          onRefresh();
+        }
+      } catch (error) {
+        alert('Gagal menghapus transaksi: ' + (error.response?.data?.error || error.message));
+      }
+    }
+  };
+
+  const handleFormClose = () => {
+    setShowForm(false);
+    setEditingTransaction(null);
+  };
+
+  const handleFormSave = () => {
+    setShowForm(false);
+    setEditingTransaction(null);
+    if (onRefresh) {
+      onRefresh();
+    }
+  };
+
   return (
     <div>
       <h2 className="report-title">S1 - JURNAL UMUM</h2>
       <p className="report-subtitle">Periode: Januari 2024</p>
+      
+      <div className="action-buttons">
+        <button onClick={handleAddClick} className="btn-primary">
+          + Tambah Transaksi
+        </button>
+      </div>
+      
+      {showForm && (
+        <TransactionForm
+          editingTransaction={editingTransaction}
+          onSave={handleFormSave}
+          onCancel={handleFormClose}
+        />
+      )}
       
       <div className="table-container">
         <table className="accounting-table">
@@ -25,11 +81,12 @@ const GeneralJournal = ({ transactions }) => {
               <th style={{ width: '250px' }}>Nama Akun</th>
               <th style={{ width: '150px' }}>Debit (Rp)</th>
               <th style={{ width: '150px' }}>Kredit (Rp)</th>
+              <th style={{ width: '120px' }}>Aksi</th>
             </tr>
           </thead>
           <tbody>
             {transactions.map((transaction, idx) => (
-              <React.Fragment key={idx}>
+              <React.Fragment key={transaction.id || idx}>
                 <tr>
                   <td rowSpan={transaction.entries.length} className="text-center">
                     {new Date(transaction.date).toLocaleDateString('id-ID', {
@@ -45,6 +102,14 @@ const GeneralJournal = ({ transactions }) => {
                   <td>{getAccountName(transaction.entries[0].account)}</td>
                   <td className="number">{transaction.entries[0].debit > 0 ? formatCurrency(transaction.entries[0].debit) : ''}</td>
                   <td className="number">{transaction.entries[0].credit > 0 ? formatCurrency(transaction.entries[0].credit) : ''}</td>
+                  <td rowSpan={transaction.entries.length} className="text-center">
+                    <button onClick={() => handleEditClick(transaction)} className="btn-edit">
+                      Edit
+                    </button>
+                    <button onClick={() => handleDeleteClick(transaction.id)} className="btn-delete">
+                      Hapus
+                    </button>
+                  </td>
                 </tr>
                 {transaction.entries.slice(1).map((entry, entryIdx) => (
                   <tr key={entryIdx}>

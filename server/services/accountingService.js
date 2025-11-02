@@ -32,114 +32,265 @@ const getChartOfAccounts = () => {
   };
 };
 
+// In-memory storage for transactions
+let transactions = [
+  {
+    id: 1,
+    date: '2024-01-01',
+    description: 'Setoran modal awal oleh Bapak Amin dan Fawzi',
+    entries: [
+      { account: '1-110', debit: 100000000, credit: 0 },
+      { account: '3-101', debit: 0, credit: 60000000 },
+      { account: '3-102', debit: 0, credit: 40000000 }
+    ]
+  },
+  {
+    id: 2,
+    date: '2024-01-01',
+    description: 'Membayar sewa kantor untuk 1 tahun',
+    entries: [
+      { account: '1-150', debit: 24000000, credit: 0 },
+      { account: '1-110', debit: 0, credit: 24000000 }
+    ]
+  },
+  {
+    id: 3,
+    date: '2024-01-01',
+    description: 'Membeli mobil senilai Rp200 juta',
+    entries: [
+      { account: '1-230', debit: 200000000, credit: 0 },
+      { account: '1-110', debit: 0, credit: 40000000 },
+      { account: '2-210', debit: 0, credit: 160000000 }
+    ]
+  },
+  {
+    id: 4,
+    date: '2024-01-02',
+    description: 'Membeli perlengkapan kantor',
+    entries: [
+      { account: '1-140', debit: 10000000, credit: 0 },
+      { account: '1-110', debit: 0, credit: 10000000 }
+    ]
+  },
+  {
+    id: 5,
+    date: '2024-01-02',
+    description: 'Mengambil uang untuk kas kecil',
+    entries: [
+      { account: '1-100', debit: 1000000, credit: 0 },
+      { account: '1-110', debit: 0, credit: 1000000 }
+    ]
+  },
+  {
+    id: 6,
+    date: '2024-01-04',
+    description: 'Menerima pembayaran awal jasa konsultasi dari PT HIJ',
+    entries: [
+      { account: '1-110', debit: 10000000, credit: 0 },
+      { account: '4-100', debit: 0, credit: 10000000 }
+    ]
+  },
+  {
+    id: 7,
+    date: '2024-01-31',
+    description: 'Menerima pembayaran akhir jasa konsultasi dari PT HIJ',
+    entries: [
+      { account: '1-110', debit: 20000000, credit: 0 },
+      { account: '4-100', debit: 0, credit: 20000000 }
+    ]
+  }
+];
+
+let nextTransactionId = 8;
+
+// CRUD Operations for Transactions
+const addTransaction = (transaction) => {
+  // Validate transaction
+  if (!transaction.date || !transaction.description || !transaction.entries || transaction.entries.length < 2) {
+    throw new Error('Invalid transaction: must have date, description, and at least 2 entries');
+  }
+  
+  // Validate double-entry bookkeeping
+  const totalDebit = transaction.entries.reduce((sum, e) => sum + (e.debit || 0), 0);
+  const totalCredit = transaction.entries.reduce((sum, e) => sum + (e.credit || 0), 0);
+  
+  if (totalDebit !== totalCredit) {
+    throw new Error(`Unbalanced transaction: Debit ${totalDebit} ≠ Credit ${totalCredit}`);
+  }
+  
+  const newTransaction = {
+    id: nextTransactionId++,
+    date: transaction.date,
+    description: transaction.description,
+    entries: transaction.entries
+  };
+  
+  transactions.push(newTransaction);
+  return newTransaction;
+};
+
+const updateTransaction = (id, transaction) => {
+  // Validate transaction
+  if (!transaction.date || !transaction.description || !transaction.entries || transaction.entries.length < 2) {
+    throw new Error('Invalid transaction: must have date, description, and at least 2 entries');
+  }
+  
+  // Validate double-entry bookkeeping
+  const totalDebit = transaction.entries.reduce((sum, e) => sum + (e.debit || 0), 0);
+  const totalCredit = transaction.entries.reduce((sum, e) => sum + (e.credit || 0), 0);
+  
+  if (totalDebit !== totalCredit) {
+    throw new Error(`Unbalanced transaction: Debit ${totalDebit} ≠ Credit ${totalCredit}`);
+  }
+  
+  const index = transactions.findIndex(t => t.id === id);
+  if (index === -1) {
+    throw new Error('Transaction not found');
+  }
+  
+  transactions[index] = {
+    id: id,
+    date: transaction.date,
+    description: transaction.description,
+    entries: transaction.entries
+  };
+  
+  return transactions[index];
+};
+
+const deleteTransaction = (id) => {
+  const index = transactions.findIndex(t => t.id === id);
+  if (index === -1) {
+    throw new Error('Transaction not found');
+  }
+  
+  transactions.splice(index, 1);
+  return true;
+};
+
 // January 2024 Transactions (S1 - Jurnal Umum)
 const getTransactions = () => {
-  return [
-    {
-      date: '2024-01-01',
-      description: 'Setoran modal awal oleh Bapak Amin dan Fawzi',
-      entries: [
-        { account: '1-110', debit: 100000000, credit: 0 },
-        { account: '3-101', debit: 0, credit: 60000000 },
-        { account: '3-102', debit: 0, credit: 40000000 }
-      ]
-    },
-    {
-      date: '2024-01-01',
-      description: 'Membayar sewa kantor untuk 1 tahun',
-      entries: [
-        { account: '1-150', debit: 24000000, credit: 0 },
-        { account: '1-110', debit: 0, credit: 24000000 }
-      ]
-    },
-    {
-      date: '2024-01-01',
-      description: 'Membeli mobil senilai Rp200 juta',
-      entries: [
-        { account: '1-230', debit: 200000000, credit: 0 },
-        { account: '1-110', debit: 0, credit: 40000000 },
-        { account: '2-210', debit: 0, credit: 160000000 }
-      ]
-    },
-    {
-      date: '2024-01-02',
-      description: 'Membeli perlengkapan kantor',
-      entries: [
-        { account: '1-140', debit: 10000000, credit: 0 },
-        { account: '1-110', debit: 0, credit: 10000000 }
-      ]
-    },
-    {
-      date: '2024-01-02',
-      description: 'Mengambil uang untuk kas kecil',
-      entries: [
-        { account: '1-100', debit: 1000000, credit: 0 },
-        { account: '1-110', debit: 0, credit: 1000000 }
-      ]
-    },
-    {
-      date: '2024-01-04',
-      description: 'Menerima pembayaran awal jasa konsultasi dari PT HIJ',
-      entries: [
-        { account: '1-110', debit: 10000000, credit: 0 },
-        { account: '4-100', debit: 0, credit: 10000000 }
-      ]
-    },
-    {
-      date: '2024-01-31',
-      description: 'Menerima pembayaran akhir jasa konsultasi dari PT HIJ',
-      entries: [
-        { account: '1-110', debit: 20000000, credit: 0 },
-        { account: '4-100', debit: 0, credit: 20000000 }
-      ]
-    }
-  ];
+  return transactions;
 };
 
 // Adjusting Entries (S4 - Jurnal Penyesuaian)
+let adjustingEntries = [
+  {
+    id: 1,
+    date: '2024-01-31',
+    description: 'Gaji pegawai belum dicatat',
+    entries: [
+      { account: '5-100', debit: 10000000, credit: 0 },
+      { account: '2-110', debit: 0, credit: 10000000 }
+    ]
+  },
+  {
+    id: 2,
+    date: '2024-01-31',
+    description: 'Tagihan listrik, air dan internet belum dicatat',
+    entries: [
+      { account: '5-120', debit: 5000000, credit: 0 },
+      { account: '2-120', debit: 0, credit: 5000000 }
+    ]
+  },
+  {
+    id: 3,
+    date: '2024-01-31',
+    description: 'Beban depresiasi kendaraan',
+    entries: [
+      { account: '5-130', debit: 1600000, credit: 0 },
+      { account: '1-240', debit: 0, credit: 1600000 }
+    ]
+  },
+  {
+    id: 4,
+    date: '2024-01-31',
+    description: 'Pemakaian perlengkapan kantor (10jt - 8jt = 2jt)',
+    entries: [
+      { account: '5-120', debit: 2000000, credit: 0 },
+      { account: '1-140', debit: 0, credit: 2000000 }
+    ]
+  },
+  {
+    id: 5,
+    date: '2024-01-31',
+    description: 'Beban sewa kantor untuk bulan Januari (24jt / 12)',
+    entries: [
+      { account: '5-110', debit: 2000000, credit: 0 },
+      { account: '1-150', debit: 0, credit: 2000000 }
+    ]
+  }
+];
+
+let nextAdjustingEntryId = 6;
+
+// CRUD Operations for Adjusting Entries
+const addAdjustingEntry = (entry) => {
+  // Validate entry
+  if (!entry.date || !entry.description || !entry.entries || entry.entries.length < 2) {
+    throw new Error('Invalid adjusting entry: must have date, description, and at least 2 entries');
+  }
+  
+  // Validate double-entry bookkeeping
+  const totalDebit = entry.entries.reduce((sum, e) => sum + (e.debit || 0), 0);
+  const totalCredit = entry.entries.reduce((sum, e) => sum + (e.credit || 0), 0);
+  
+  if (totalDebit !== totalCredit) {
+    throw new Error(`Unbalanced entry: Debit ${totalDebit} ≠ Credit ${totalCredit}`);
+  }
+  
+  const newEntry = {
+    id: nextAdjustingEntryId++,
+    date: entry.date,
+    description: entry.description,
+    entries: entry.entries
+  };
+  
+  adjustingEntries.push(newEntry);
+  return newEntry;
+};
+
+const updateAdjustingEntry = (id, entry) => {
+  // Validate entry
+  if (!entry.date || !entry.description || !entry.entries || entry.entries.length < 2) {
+    throw new Error('Invalid adjusting entry: must have date, description, and at least 2 entries');
+  }
+  
+  // Validate double-entry bookkeeping
+  const totalDebit = entry.entries.reduce((sum, e) => sum + (e.debit || 0), 0);
+  const totalCredit = entry.entries.reduce((sum, e) => sum + (e.credit || 0), 0);
+  
+  if (totalDebit !== totalCredit) {
+    throw new Error(`Unbalanced entry: Debit ${totalDebit} ≠ Credit ${totalCredit}`);
+  }
+  
+  const index = adjustingEntries.findIndex(e => e.id === id);
+  if (index === -1) {
+    throw new Error('Adjusting entry not found');
+  }
+  
+  adjustingEntries[index] = {
+    id: id,
+    date: entry.date,
+    description: entry.description,
+    entries: entry.entries
+  };
+  
+  return adjustingEntries[index];
+};
+
+const deleteAdjustingEntry = (id) => {
+  const index = adjustingEntries.findIndex(e => e.id === id);
+  if (index === -1) {
+    throw new Error('Adjusting entry not found');
+  }
+  
+  adjustingEntries.splice(index, 1);
+  return true;
+};
+
 const getAdjustingEntries = () => {
-  return [
-    {
-      date: '2024-01-31',
-      description: 'Gaji pegawai belum dicatat',
-      entries: [
-        { account: '5-100', debit: 10000000, credit: 0 },
-        { account: '2-110', debit: 0, credit: 10000000 }
-      ]
-    },
-    {
-      date: '2024-01-31',
-      description: 'Tagihan listrik, air dan internet belum dicatat',
-      entries: [
-        { account: '5-120', debit: 5000000, credit: 0 },
-        { account: '2-120', debit: 0, credit: 5000000 }
-      ]
-    },
-    {
-      date: '2024-01-31',
-      description: 'Beban depresiasi kendaraan',
-      entries: [
-        { account: '5-130', debit: 1600000, credit: 0 },
-        { account: '1-240', debit: 0, credit: 1600000 }
-      ]
-    },
-    {
-      date: '2024-01-31',
-      description: 'Pemakaian perlengkapan kantor (10jt - 8jt = 2jt)',
-      entries: [
-        { account: '5-120', debit: 2000000, credit: 0 },
-        { account: '1-140', debit: 0, credit: 2000000 }
-      ]
-    },
-    {
-      date: '2024-01-31',
-      description: 'Beban sewa kantor untuk bulan Januari (24jt / 12)',
-      entries: [
-        { account: '5-110', debit: 2000000, credit: 0 },
-        { account: '1-150', debit: 0, credit: 2000000 }
-      ]
-    }
-  ];
+  return adjustingEntries;
 };
 
 // Calculate all account balances
@@ -340,6 +491,12 @@ module.exports = {
   getTransactions,
   getAdjustingEntries,
   calculateAccountBalances,
-  calculateReports
+  calculateReports,
+  addTransaction,
+  updateTransaction,
+  deleteTransaction,
+  addAdjustingEntry,
+  updateAdjustingEntry,
+  deleteAdjustingEntry
 };
 

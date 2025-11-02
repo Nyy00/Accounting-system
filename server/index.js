@@ -3,6 +3,10 @@ const express = require('express');
 const cors = require('cors');
 const path = require('path');
 
+// Initialize database
+const { getDatabase } = require('./services/database');
+getDatabase(); // This will initialize the schema on first call
+
 const app = express();
 const PORT = process.env.PORT || 5000;
 const NODE_ENV = process.env.NODE_ENV || 'development';

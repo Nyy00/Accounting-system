@@ -1,90 +1,14 @@
-const fs = require('fs');
-const path = require('path');
+const { getDatabase } = require('./database');
 
-// File paths for data persistence
-// For Vercel, use /tmp (but note: /tmp is not persistent across deployments)
-// For local development, use data/ folder
-const DATA_DIR = process.env.DATA_DIR || (
-  process.env.VERCEL ? '/tmp/accounting-data' : path.join(__dirname, '../../data')
-);
-const TRANSACTIONS_FILE = path.join(DATA_DIR, 'transactions.json');
-const ADJUSTING_ENTRIES_FILE = path.join(DATA_DIR, 'adjusting-entries.json');
-const STATE_FILE = path.join(DATA_DIR, 'state.json');
-const METADATA_FILE = path.join(DATA_DIR, 'metadata.json');
-const COA_FILE = path.join(DATA_DIR, 'chart-of-accounts.json');
+// Helper to get database connection
+const db = () => getDatabase();
 
-// Ensure data directory exists
-if (!fs.existsSync(DATA_DIR)) {
-  fs.mkdirSync(DATA_DIR, { recursive: true });
-}
-
-// Helper functions for file operations
-const readJsonFile = (filePath, defaultValue = null) => {
-  try {
-    if (fs.existsSync(filePath)) {
-      const data = fs.readFileSync(filePath, 'utf8');
-      return JSON.parse(data);
-    }
-  } catch (error) {
-    console.error(`Error reading ${filePath}:`, error);
-  }
-  return defaultValue;
-};
-
-const writeJsonFile = (filePath, data) => {
-  try {
-    fs.writeFileSync(filePath, JSON.stringify(data, null, 2), 'utf8');
-    return true;
-  } catch (error) {
-    console.error(`Error writing ${filePath}:`, error);
-    return false;
-  }
-};
-
-// Load data from files on startup
-const loadData = () => {
-  // Start with empty arrays - no default data
-  const defaultTransactions = [];
-  const defaultAdjustingEntries = [];
-
-  // Check if files exist first to avoid overwriting with defaults
-  const transactionsExist = fs.existsSync(TRANSACTIONS_FILE);
-  const adjustingEntriesExist = fs.existsSync(ADJUSTING_ENTRIES_FILE);
-  const stateExists = fs.existsSync(STATE_FILE);
-
-  // Only use defaults if file doesn't exist
-  const loadedTransactions = transactionsExist 
-    ? readJsonFile(TRANSACTIONS_FILE, [])  // If exists but empty, return empty array
-    : defaultTransactions;
-  const loadedAdjustingEntries = adjustingEntriesExist
-    ? readJsonFile(ADJUSTING_ENTRIES_FILE, [])  // If exists but empty, return empty array
-    : defaultAdjustingEntries;
-  const state = stateExists
-    ? readJsonFile(STATE_FILE, { nextTransactionId: 1, nextAdjustingEntryId: 1 })
-    : { nextTransactionId: 1, nextAdjustingEntryId: 1 };
-
-  // Initialize files if they don't exist (only on first run)
-  if (!transactionsExist) {
-    writeJsonFile(TRANSACTIONS_FILE, loadedTransactions);
-  }
-  if (!adjustingEntriesExist) {
-    writeJsonFile(ADJUSTING_ENTRIES_FILE, loadedAdjustingEntries);
-  }
-  if (!stateExists) {
-    writeJsonFile(STATE_FILE, state);
-  }
-
-  return {
-    transactions: loadedTransactions,
-    adjustingEntries: loadedAdjustingEntries,
-    nextTransactionId: state.nextTransactionId || 1,
-    nextAdjustingEntryId: state.nextAdjustingEntryId || 1
-  };
-};
-
-// Chart of Accounts - Now stored in file
+// Chart of Accounts - Get all accounts grouped by type
 const getChartOfAccounts = () => {
-  const defaultCOA = {
+  const database = db();
+  const accounts = database.prepare('SELECT * FROM chart_of_accounts ORDER BY code').all();
+  
+  const result = {
     assets: [],
     liabilities: [],
     equity: [],
@@ -92,389 +16,493 @@ const getChartOfAccounts = () => {
     expenses: []
   };
   
-  const coaExists = fs.existsSync(COA_FILE);
-  const chartOfAccounts = coaExists
-    ? readJsonFile(COA_FILE, defaultCOA)
-    : defaultCOA;
+  accounts.forEach(acc => {
+    const account = {
+      code: acc.code,
+      name: acc.name,
+      type: acc.type,
+      isContra: acc.is_contra === 1
+    };
+    
+    switch (acc.type) {
+      case 'asset':
+        result.assets.push(account);
+        break;
+      case 'liability':
+        result.liabilities.push(account);
+        break;
+      case 'equity':
+        result.equity.push(account);
+        break;
+      case 'revenue':
+        result.revenue.push(account);
+        break;
+      case 'expense':
+        result.expenses.push(account);
+        break;
+    }
+  });
   
-  // Initialize file if it doesn't exist
-  if (!coaExists) {
-    writeJsonFile(COA_FILE, chartOfAccounts);
-  }
-  
-  return chartOfAccounts;
+  return result;
 };
 
 // CRUD Operations for Chart of Accounts
 const addAccount = (account) => {
-  const chartOfAccounts = getChartOfAccounts();
   const { code, name, type, isContra } = account;
   
   if (!code || !name || !type) {
     throw new Error('Account must have code, name, and type');
   }
   
-  // Check if code already exists
-  const allAccounts = [
-    ...chartOfAccounts.assets,
-    ...chartOfAccounts.liabilities,
-    ...chartOfAccounts.equity,
-    ...chartOfAccounts.revenue,
-    ...chartOfAccounts.expenses
-  ];
+  const database = db();
   
-  if (allAccounts.find(acc => acc.code === code)) {
+  // Check if code already exists
+  const existing = database.prepare('SELECT code FROM chart_of_accounts WHERE code = ?').get(code);
+  if (existing) {
     throw new Error(`Account code ${code} already exists`);
   }
   
-  const newAccount = {
-    code,
-    name,
-    type,
-    isContra: isContra || false
-  };
-  
-  // Add to appropriate category
-  const categoryMap = {
-    'asset': 'assets',
-    'liability': 'liabilities',
-    'equity': 'equity',
-    'revenue': 'revenue',
-    'expense': 'expenses'
-  };
-  
-  const category = categoryMap[type] || 'assets';
-  chartOfAccounts[category].push(newAccount);
-  
-  // Save to file
-  const saved = writeJsonFile(COA_FILE, chartOfAccounts);
-  if (!saved) {
-    throw new Error('Failed to save account to file');
+  // Insert new account
+  try {
+    database.prepare(`
+      INSERT INTO chart_of_accounts (code, name, type, is_contra)
+      VALUES (?, ?, ?, ?)
+    `).run(code, name, type, isContra ? 1 : 0);
+    
+    return { code, name, type, isContra: isContra || false };
+  } catch (error) {
+    throw new Error(`Failed to add account: ${error.message}`);
   }
-  
-  return newAccount;
 };
 
 const updateAccount = (code, account) => {
-  const chartOfAccounts = getChartOfAccounts();
   const { name, type, isContra } = account;
   
   if (!name || !type) {
     throw new Error('Account must have name and type');
   }
   
-  // Find account in all categories
-  let found = false;
-  const categories = ['assets', 'liabilities', 'equity', 'revenue', 'expenses'];
+  const database = db();
   
-  const categoryMap = {
-    'asset': 'assets',
-    'liability': 'liabilities',
-    'equity': 'equity',
-    'revenue': 'revenue',
-    'expense': 'expenses'
-  };
-  
-  const targetCategory = categoryMap[type] || 'assets';
-  
-  for (const category of categories) {
-    const index = chartOfAccounts[category].findIndex(acc => acc.code === code);
-    if (index !== -1) {
-      // If type changed, move to new category
-      if (targetCategory !== category) {
-        chartOfAccounts[category].splice(index, 1);
-        chartOfAccounts[targetCategory].push({
-          code,
-          name,
-          type,
-          isContra: isContra || false
-        });
-      } else {
-        chartOfAccounts[category][index] = {
-          code,
-          name,
-          type,
-          isContra: isContra || false
-        };
-      }
-      found = true;
-      break;
-    }
-  }
-  
-  if (!found) {
+  // Check if account exists
+  const existing = database.prepare('SELECT code FROM chart_of_accounts WHERE code = ?').get(code);
+  if (!existing) {
     throw new Error('Account not found');
   }
   
-  // Save to file
-  const saved = writeJsonFile(COA_FILE, chartOfAccounts);
-  if (!saved) {
-    throw new Error('Failed to save account update to file');
+  // Update account
+  try {
+    database.prepare(`
+      UPDATE chart_of_accounts 
+      SET name = ?, type = ?, is_contra = ?, updated_at = CURRENT_TIMESTAMP
+      WHERE code = ?
+    `).run(name, type, isContra ? 1 : 0, code);
+    
+    return { code, name, type, isContra: isContra || false };
+  } catch (error) {
+    throw new Error(`Failed to update account: ${error.message}`);
   }
-  
-  return { code, name, type, isContra: isContra || false };
 };
 
 const deleteAccount = (code) => {
-  const chartOfAccounts = getChartOfAccounts();
+  const database = db();
   
-  const categories = ['assets', 'liabilities', 'equity', 'revenue', 'expenses'];
-  let found = false;
-  
-  for (const category of categories) {
-    const index = chartOfAccounts[category].findIndex(acc => acc.code === code);
-    if (index !== -1) {
-      chartOfAccounts[category].splice(index, 1);
-      found = true;
-      break;
-    }
-  }
-  
-  if (!found) {
+  // Check if account exists
+  const existing = database.prepare('SELECT code FROM chart_of_accounts WHERE code = ?').get(code);
+  if (!existing) {
     throw new Error('Account not found');
   }
   
-  // Save to file
-  const saved = writeJsonFile(COA_FILE, chartOfAccounts);
-  if (!saved) {
-    throw new Error('Failed to save account deletion to file');
+  // Check if account is used in transactions or adjusting entries
+  const usedInTransactions = database.prepare(`
+    SELECT COUNT(*) as count FROM transaction_entries WHERE account_code = ?
+  `).get(code);
+  
+  const usedInAdjustments = database.prepare(`
+    SELECT COUNT(*) as count FROM adjusting_entry_entries WHERE account_code = ?
+  `).get(code);
+  
+  if (usedInTransactions.count > 0 || usedInAdjustments.count > 0) {
+    throw new Error(`Cannot delete account ${code}: Account is used in transactions or adjusting entries`);
   }
   
-  return true;
-};
-
-// Load data from files
-const dataStore = loadData();
-let transactions = dataStore.transactions;
-let nextTransactionId = dataStore.nextTransactionId;
-
-// Helper function to reload data from file
-const reloadTransactions = () => {
-  // Always read from file, use empty array as default if file doesn't exist
-  const fileData = readJsonFile(TRANSACTIONS_FILE, null);
-  
-  // If file exists, use its data (even if empty array)
-  if (fileData !== null) {
-    transactions = fileData;
-    // Update nextTransactionId based on max ID in transactions
-    if (transactions.length > 0) {
-      const maxId = Math.max(...transactions.map(t => t.id || 0));
-      nextTransactionId = maxId + 1;
-    }
+  // Delete account
+  try {
+    database.prepare('DELETE FROM chart_of_accounts WHERE code = ?').run(code);
+    return true;
+  } catch (error) {
+    throw new Error(`Failed to delete account: ${error.message}`);
   }
-  // If fileData is null (file doesn't exist), keep current transactions
-  
-  return transactions;
-};
-
-// Helper function to reload adjusting entries from file
-const reloadAdjustingEntries = () => {
-  // Always read from file, use null as default if file doesn't exist
-  const fileData = readJsonFile(ADJUSTING_ENTRIES_FILE, null);
-  
-  // If file exists, use its data (even if empty array)
-  if (fileData !== null) {
-    adjustingEntries = fileData;
-    // Update nextAdjustingEntryId based on max ID
-    if (adjustingEntries.length > 0) {
-      const maxId = Math.max(...adjustingEntries.map(e => e.id || 0));
-      nextAdjustingEntryId = maxId + 1;
-    }
-  }
-  // If fileData is null (file doesn't exist), keep current adjustingEntries
-  
-  return adjustingEntries;
 };
 
 // CRUD Operations for Transactions
+const getTransactions = () => {
+  const database = db();
+  
+  const transactions = database.prepare(`
+    SELECT id, date, description 
+    FROM transactions 
+    ORDER BY date, id
+  `).all();
+  
+  return transactions.map(trans => {
+    const entries = database.prepare(`
+      SELECT account_code as account, debit, credit
+      FROM transaction_entries
+      WHERE transaction_id = ?
+      ORDER BY id
+    `).all(trans.id);
+    
+    return {
+      id: trans.id,
+      date: trans.date,
+      description: trans.description,
+      entries: entries.map(e => ({
+        account: e.account,
+        debit: e.debit || 0,
+        credit: e.credit || 0
+      }))
+    };
+  });
+};
+
 const addTransaction = (transaction) => {
-  // Reload from file to ensure we have latest data
-  reloadTransactions();
-  // Validate transaction
-  if (!transaction.date || !transaction.description || !transaction.entries || transaction.entries.length < 2) {
+  const { date, description, entries } = transaction;
+  
+  if (!date || !description || !entries || entries.length < 2) {
     throw new Error('Invalid transaction: must have date, description, and at least 2 entries');
   }
   
   // Validate double-entry bookkeeping
-  const totalDebit = transaction.entries.reduce((sum, e) => sum + (e.debit || 0), 0);
-  const totalCredit = transaction.entries.reduce((sum, e) => sum + (e.credit || 0), 0);
+  const totalDebit = entries.reduce((sum, e) => sum + (e.debit || 0), 0);
+  const totalCredit = entries.reduce((sum, e) => sum + (e.credit || 0), 0);
   
   if (totalDebit !== totalCredit) {
     throw new Error(`Unbalanced transaction: Debit ${totalDebit} ≠ Credit ${totalCredit}`);
   }
   
-  const newTransaction = {
-    id: nextTransactionId++,
-    date: transaction.date,
-    description: transaction.description,
-    entries: transaction.entries
-  };
+  const database = db();
   
-  transactions.push(newTransaction);
-  
-  // Save to file
-  writeJsonFile(TRANSACTIONS_FILE, transactions);
-  writeJsonFile(STATE_FILE, { nextTransactionId, nextAdjustingEntryId });
-  
-  return newTransaction;
+  try {
+    // Begin transaction
+    const insertTransaction = database.prepare(`
+      INSERT INTO transactions (date, description)
+      VALUES (?, ?)
+    `);
+    
+    const insertEntry = database.prepare(`
+      INSERT INTO transaction_entries (transaction_id, account_code, debit, credit)
+      VALUES (?, ?, ?, ?)
+    `);
+    
+    const insertTransactionMany = database.transaction((transactions) => {
+      for (const trans of transactions) {
+        const result = insertTransaction.run(trans.date, trans.description);
+        const transactionId = result.lastInsertRowid;
+        
+        for (const entry of trans.entries) {
+          insertEntry.run(
+            transactionId,
+            entry.account,
+            entry.debit || 0,
+            entry.credit || 0
+          );
+        }
+      }
+    });
+    
+    const result = insertTransaction.run(date, description);
+    const transactionId = result.lastInsertRowid;
+    
+    for (const entry of entries) {
+      // Verify account exists
+      const account = database.prepare('SELECT code FROM chart_of_accounts WHERE code = ?').get(entry.account);
+      if (!account) {
+        throw new Error(`Account ${entry.account} does not exist`);
+      }
+      
+      insertEntry.run(
+        transactionId,
+        entry.account,
+        entry.debit || 0,
+        entry.credit || 0
+      );
+    }
+    
+    return {
+      id: transactionId,
+      date,
+      description,
+      entries
+    };
+  } catch (error) {
+    throw new Error(`Failed to add transaction: ${error.message}`);
+  }
 };
 
 const updateTransaction = (id, transaction) => {
-  // Reload from file to ensure we have latest data
-  reloadTransactions();
+  const { date, description, entries } = transaction;
   
-  // Validate transaction
-  if (!transaction.date || !transaction.description || !transaction.entries || transaction.entries.length < 2) {
+  if (!date || !description || !entries || entries.length < 2) {
     throw new Error('Invalid transaction: must have date, description, and at least 2 entries');
   }
   
   // Validate double-entry bookkeeping
-  const totalDebit = transaction.entries.reduce((sum, e) => sum + (e.debit || 0), 0);
-  const totalCredit = transaction.entries.reduce((sum, e) => sum + (e.credit || 0), 0);
+  const totalDebit = entries.reduce((sum, e) => sum + (e.debit || 0), 0);
+  const totalCredit = entries.reduce((sum, e) => sum + (e.credit || 0), 0);
   
   if (totalDebit !== totalCredit) {
     throw new Error(`Unbalanced transaction: Debit ${totalDebit} ≠ Credit ${totalCredit}`);
   }
   
-  const index = transactions.findIndex(t => t.id === id);
-  if (index === -1) {
+  const database = db();
+  
+  // Check if transaction exists
+  const existing = database.prepare('SELECT id FROM transactions WHERE id = ?').get(id);
+  if (!existing) {
     throw new Error('Transaction not found');
   }
   
-  transactions[index] = {
-    id: id,
-    date: transaction.date,
-    description: transaction.description,
-    entries: transaction.entries
-  };
-  
-  // Save to file
-  writeJsonFile(TRANSACTIONS_FILE, transactions);
-  
-  return transactions[index];
+  try {
+    // Update transaction
+    database.prepare(`
+      UPDATE transactions 
+      SET date = ?, description = ?, updated_at = CURRENT_TIMESTAMP
+      WHERE id = ?
+    `).run(date, description, id);
+    
+    // Delete old entries
+    database.prepare('DELETE FROM transaction_entries WHERE transaction_id = ?').run(id);
+    
+    // Insert new entries
+    const insertEntry = database.prepare(`
+      INSERT INTO transaction_entries (transaction_id, account_code, debit, credit)
+      VALUES (?, ?, ?, ?)
+    `);
+    
+    for (const entry of entries) {
+      // Verify account exists
+      const account = database.prepare('SELECT code FROM chart_of_accounts WHERE code = ?').get(entry.account);
+      if (!account) {
+        throw new Error(`Account ${entry.account} does not exist`);
+      }
+      
+      insertEntry.run(
+        id,
+        entry.account,
+        entry.debit || 0,
+        entry.credit || 0
+      );
+    }
+    
+    return {
+      id,
+      date,
+      description,
+      entries
+    };
+  } catch (error) {
+    throw new Error(`Failed to update transaction: ${error.message}`);
+  }
 };
 
 const deleteTransaction = (id) => {
-  // Reload from file to ensure we have latest data
-  reloadTransactions();
+  const database = db();
   
-  const index = transactions.findIndex(t => t.id === id);
-  if (index === -1) {
+  // Check if transaction exists
+  const existing = database.prepare('SELECT id FROM transactions WHERE id = ?').get(id);
+  if (!existing) {
     throw new Error('Transaction not found');
   }
   
-  transactions.splice(index, 1);
-  
-  // Save to file
-  const saved = writeJsonFile(TRANSACTIONS_FILE, transactions);
-  if (!saved) {
-    throw new Error('Failed to save transaction deletion to file');
+  try {
+    // Delete entries first (foreign key cascade should handle this, but explicit is better)
+    database.prepare('DELETE FROM transaction_entries WHERE transaction_id = ?').run(id);
+    
+    // Delete transaction
+    database.prepare('DELETE FROM transactions WHERE id = ?').run(id);
+    
+    return true;
+  } catch (error) {
+    throw new Error(`Failed to delete transaction: ${error.message}`);
   }
-  
-  return true;
 };
-
-// January 2024 Transactions (S1 - Jurnal Umum)
-const getTransactions = () => {
-  // Always reload from file to get latest data
-  return reloadTransactions();
-};
-
-// Adjusting Entries (S4 - Jurnal Penyesuaian)
-let adjustingEntries = dataStore.adjustingEntries;
-let nextAdjustingEntryId = dataStore.nextAdjustingEntryId;
 
 // CRUD Operations for Adjusting Entries
+const getAdjustingEntries = () => {
+  const database = db();
+  
+  const entries = database.prepare(`
+    SELECT id, date, description 
+    FROM adjusting_entries 
+    ORDER BY date, id
+  `).all();
+  
+  return entries.map(entry => {
+    const entryEntries = database.prepare(`
+      SELECT account_code as account, debit, credit
+      FROM adjusting_entry_entries
+      WHERE adjusting_entry_id = ?
+      ORDER BY id
+    `).all(entry.id);
+    
+    return {
+      id: entry.id,
+      date: entry.date,
+      description: entry.description,
+      entries: entryEntries.map(e => ({
+        account: e.account,
+        debit: e.debit || 0,
+        credit: e.credit || 0
+      }))
+    };
+  });
+};
+
 const addAdjustingEntry = (entry) => {
-  // Reload from file to ensure we have latest data
-  reloadAdjustingEntries();
-  // Validate entry
-  if (!entry.date || !entry.description || !entry.entries || entry.entries.length < 2) {
+  const { date, description, entries } = entry;
+  
+  if (!date || !description || !entries || entries.length < 2) {
     throw new Error('Invalid adjusting entry: must have date, description, and at least 2 entries');
   }
   
   // Validate double-entry bookkeeping
-  const totalDebit = entry.entries.reduce((sum, e) => sum + (e.debit || 0), 0);
-  const totalCredit = entry.entries.reduce((sum, e) => sum + (e.credit || 0), 0);
+  const totalDebit = entries.reduce((sum, e) => sum + (e.debit || 0), 0);
+  const totalCredit = entries.reduce((sum, e) => sum + (e.credit || 0), 0);
   
   if (totalDebit !== totalCredit) {
     throw new Error(`Unbalanced entry: Debit ${totalDebit} ≠ Credit ${totalCredit}`);
   }
   
-  const newEntry = {
-    id: nextAdjustingEntryId++,
-    date: entry.date,
-    description: entry.description,
-    entries: entry.entries
-  };
+  const database = db();
   
-  adjustingEntries.push(newEntry);
-  
-  // Save to file
-  writeJsonFile(ADJUSTING_ENTRIES_FILE, adjustingEntries);
-  writeJsonFile(STATE_FILE, { nextTransactionId, nextAdjustingEntryId });
-  
-  return newEntry;
+  try {
+    // Insert adjusting entry
+    const result = database.prepare(`
+      INSERT INTO adjusting_entries (date, description)
+      VALUES (?, ?)
+    `).run(date, description);
+    
+    const entryId = result.lastInsertRowid;
+    
+    // Insert entries
+    const insertEntryEntry = database.prepare(`
+      INSERT INTO adjusting_entry_entries (adjusting_entry_id, account_code, debit, credit)
+      VALUES (?, ?, ?, ?)
+    `);
+    
+    for (const e of entries) {
+      // Verify account exists
+      const account = database.prepare('SELECT code FROM chart_of_accounts WHERE code = ?').get(e.account);
+      if (!account) {
+        throw new Error(`Account ${e.account} does not exist`);
+      }
+      
+      insertEntryEntry.run(
+        entryId,
+        e.account,
+        e.debit || 0,
+        e.credit || 0
+      );
+    }
+    
+    return {
+      id: entryId,
+      date,
+      description,
+      entries
+    };
+  } catch (error) {
+    throw new Error(`Failed to add adjusting entry: ${error.message}`);
+  }
 };
 
 const updateAdjustingEntry = (id, entry) => {
-  // Reload from file to ensure we have latest data
-  reloadAdjustingEntries();
+  const { date, description, entries } = entry;
   
-  // Validate entry
-  if (!entry.date || !entry.description || !entry.entries || entry.entries.length < 2) {
+  if (!date || !description || !entries || entries.length < 2) {
     throw new Error('Invalid adjusting entry: must have date, description, and at least 2 entries');
   }
   
   // Validate double-entry bookkeeping
-  const totalDebit = entry.entries.reduce((sum, e) => sum + (e.debit || 0), 0);
-  const totalCredit = entry.entries.reduce((sum, e) => sum + (e.credit || 0), 0);
+  const totalDebit = entries.reduce((sum, e) => sum + (e.debit || 0), 0);
+  const totalCredit = entries.reduce((sum, e) => sum + (e.credit || 0), 0);
   
   if (totalDebit !== totalCredit) {
     throw new Error(`Unbalanced entry: Debit ${totalDebit} ≠ Credit ${totalCredit}`);
   }
   
-  const index = adjustingEntries.findIndex(e => e.id === id);
-  if (index === -1) {
+  const database = db();
+  
+  // Check if entry exists
+  const existing = database.prepare('SELECT id FROM adjusting_entries WHERE id = ?').get(id);
+  if (!existing) {
     throw new Error('Adjusting entry not found');
   }
   
-  adjustingEntries[index] = {
-    id: id,
-    date: entry.date,
-    description: entry.description,
-    entries: entry.entries
-  };
-  
-  // Save to file
-  writeJsonFile(ADJUSTING_ENTRIES_FILE, adjustingEntries);
-  
-  return adjustingEntries[index];
+  try {
+    // Update adjusting entry
+    database.prepare(`
+      UPDATE adjusting_entries 
+      SET date = ?, description = ?, updated_at = CURRENT_TIMESTAMP
+      WHERE id = ?
+    `).run(date, description, id);
+    
+    // Delete old entries
+    database.prepare('DELETE FROM adjusting_entry_entries WHERE adjusting_entry_id = ?').run(id);
+    
+    // Insert new entries
+    const insertEntryEntry = database.prepare(`
+      INSERT INTO adjusting_entry_entries (adjusting_entry_id, account_code, debit, credit)
+      VALUES (?, ?, ?, ?)
+    `);
+    
+    for (const e of entries) {
+      // Verify account exists
+      const account = database.prepare('SELECT code FROM chart_of_accounts WHERE code = ?').get(e.account);
+      if (!account) {
+        throw new Error(`Account ${e.account} does not exist`);
+      }
+      
+      insertEntryEntry.run(
+        id,
+        e.account,
+        e.debit || 0,
+        e.credit || 0
+      );
+    }
+    
+    return {
+      id,
+      date,
+      description,
+      entries
+    };
+  } catch (error) {
+    throw new Error(`Failed to update adjusting entry: ${error.message}`);
+  }
 };
 
 const deleteAdjustingEntry = (id) => {
-  // Reload from file to ensure we have latest data
-  reloadAdjustingEntries();
+  const database = db();
   
-  const index = adjustingEntries.findIndex(e => e.id === id);
-  if (index === -1) {
+  // Check if entry exists
+  const existing = database.prepare('SELECT id FROM adjusting_entries WHERE id = ?').get(id);
+  if (!existing) {
     throw new Error('Adjusting entry not found');
   }
   
-  adjustingEntries.splice(index, 1);
-  
-  // Save to file
-  const saved = writeJsonFile(ADJUSTING_ENTRIES_FILE, adjustingEntries);
-  if (!saved) {
-    throw new Error('Failed to save adjusting entry deletion to file');
+  try {
+    // Delete entries first
+    database.prepare('DELETE FROM adjusting_entry_entries WHERE adjusting_entry_id = ?').run(id);
+    
+    // Delete adjusting entry
+    database.prepare('DELETE FROM adjusting_entries WHERE id = ?').run(id);
+    
+    return true;
+  } catch (error) {
+    throw new Error(`Failed to delete adjusting entry: ${error.message}`);
   }
-  
-  return true;
-};
-
-const getAdjustingEntries = () => {
-  // Always reload from file to get latest data
-  return reloadAdjustingEntries();
 };
 
 // Calculate all account balances
@@ -509,16 +537,20 @@ const calculateAccountBalances = () => {
   // Process regular transactions
   transactions.forEach(trans => {
     trans.entries.forEach(entry => {
-      balances[entry.account].debit += entry.debit;
-      balances[entry.account].credit += entry.credit;
+      if (balances[entry.account]) {
+        balances[entry.account].debit += entry.debit;
+        balances[entry.account].credit += entry.credit;
+      }
     });
   });
   
   // Process adjusting entries
   adjustments.forEach(adj => {
     adj.entries.forEach(entry => {
-      balances[entry.account].debit += entry.debit;
-      balances[entry.account].credit += entry.credit;
+      if (balances[entry.account]) {
+        balances[entry.account].debit += entry.debit;
+        balances[entry.account].credit += entry.credit;
+      }
     });
   });
   
@@ -526,8 +558,6 @@ const calculateAccountBalances = () => {
   allAccounts.forEach(acc => {
     const bal = balances[acc.code];
     if (acc.type === 'asset' || acc.type === 'expense') {
-      // For contra asset accounts, calculate as normal but they will have negative balance
-      // (credit > debit), which is correct for reducing total assets
       bal.balance = bal.debit - bal.credit;
     } else if (acc.type === 'liability' || acc.type === 'equity' || acc.type === 'revenue') {
       bal.balance = bal.credit - bal.debit;
@@ -567,13 +597,13 @@ const calculateReports = () => {
   const revenues = accounts.revenue.map(acc => ({
     account: acc.code,
     name: acc.name,
-    amount: balances[acc.code].balance
+    amount: balances[acc.code] ? balances[acc.code].balance : 0
   }));
   
   const expenses = accounts.expenses.map(acc => ({
     account: acc.code,
     name: acc.name,
-    amount: balances[acc.code].balance
+    amount: balances[acc.code] ? balances[acc.code].balance : 0
   }));
   
   const totalRevenue = revenues.reduce((sum, r) => sum + r.amount, 0);
@@ -584,19 +614,19 @@ const calculateReports = () => {
   const assets = accounts.assets.map(acc => ({
     account: acc.code,
     name: acc.name,
-    amount: balances[acc.code].balance
+    amount: balances[acc.code] ? balances[acc.code].balance : 0
   }));
   
   const liabilities = accounts.liabilities.map(acc => ({
     account: acc.code,
     name: acc.name,
-    amount: balances[acc.code].balance
+    amount: balances[acc.code] ? balances[acc.code].balance : 0
   }));
   
   const equityItems = accounts.equity.map(acc => ({
     account: acc.code,
     name: acc.name,
-    amount: balances[acc.code].balance
+    amount: balances[acc.code] ? balances[acc.code].balance : 0
   }));
   
   // Calculate totals for financial position
@@ -604,8 +634,6 @@ const calculateReports = () => {
   const totalLiabilities = liabilities.reduce((sum, l) => sum + (l.amount || 0), 0);
   
   // For equity in financial position:
-  // Modal partners + Retained Earnings (which includes net income if not distributed)
-  // Since this is end of first period, we show initial capital + net income
   const initialCapital = equityItems
     .filter(e => e.account === '3-101' || e.account === '3-102')
     .reduce((sum, e) => sum + (e.amount || 0), 0);
@@ -613,14 +641,10 @@ const calculateReports = () => {
   const totalEquity = initialCapital + retainedEarnings + netIncome;
   
   // S7 - Statement of Changes in Equity
-  // Initial capital - get from first transaction (capital contribution)
-  // For CV ABC, initial capital is from the first transaction
-  const initialAminCapital = 60000000; // From first transaction
-  const initialFawziCapital = 40000000; // From first transaction
+  const initialAminCapital = 60000000;
+  const initialFawziCapital = 40000000;
   const totalInitialCapital = initialAminCapital + initialFawziCapital;
   
-  // For CV, net income is typically added to retained earnings or distributed to partners
-  // Here we'll add it to retained earnings for this period
   const retainedEarningsBalance = balances['3-200'] ? balances['3-200'].balance : 0;
   const finalRetainedEarnings = retainedEarningsBalance + netIncome;
   
@@ -670,7 +694,7 @@ const calculateReports = () => {
   };
 };
 
-// Metadata functions (Judul, Periode, Nama Pembuat)
+// Metadata functions
 const defaultMetadata = {
   companyName: 'CV ABC',
   reportTitle: 'Sistem Akuntansi CV ABC',
@@ -681,17 +705,47 @@ const defaultMetadata = {
 };
 
 const getMetadata = () => {
-  return readJsonFile(METADATA_FILE, defaultMetadata);
+  const database = db();
+  
+  const metadata = database.prepare('SELECT * FROM metadata').all();
+  const result = { ...defaultMetadata };
+  
+  metadata.forEach(row => {
+    try {
+      result[row.key] = JSON.parse(row.value);
+    } catch {
+      result[row.key] = row.value;
+    }
+  });
+  
+  return result;
 };
 
 const updateMetadata = (metadata) => {
+  const database = db();
   const currentMetadata = getMetadata();
   const updatedMetadata = {
     ...currentMetadata,
     ...metadata,
     date: metadata.date || currentMetadata.date || new Date().toISOString().split('T')[0]
   };
-  writeJsonFile(METADATA_FILE, updatedMetadata);
+  
+  // Save all metadata keys
+  const insert = database.prepare('INSERT INTO metadata (key, value) VALUES (?, ?)');
+  const update = database.prepare('UPDATE metadata SET value = ?, updated_at = CURRENT_TIMESTAMP WHERE key = ?');
+  const check = database.prepare('SELECT key FROM metadata WHERE key = ?');
+  
+  for (const [key, value] of Object.entries(updatedMetadata)) {
+    const exists = check.get(key);
+    const valueStr = typeof value === 'object' ? JSON.stringify(value) : value;
+    
+    if (exists) {
+      update.run(valueStr, key);
+    } else {
+      insert.run(key, valueStr);
+    }
+  }
+  
   return updatedMetadata;
 };
 
@@ -713,4 +767,3 @@ module.exports = {
   updateAccount,
   deleteAccount
 };
-

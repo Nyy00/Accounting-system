@@ -18,13 +18,44 @@ const ChartOfAccounts = ({ onRefresh }) => {
 
   const fetchAccounts = useCallback(async () => {
     try {
+      setLoading(true);
       const response = await axios.get(`${API_URL}/api/accounting/chart-of-accounts`);
-      setChartOfAccounts(response.data);
-      setLoading(false);
+      console.log('API Response:', response.data); // Debug log
+      
+      // Ensure we have valid data structure
+      const data = response.data || {};
+      const chartData = {
+        assets: Array.isArray(data.assets) ? data.assets : [],
+        liabilities: Array.isArray(data.liabilities) ? data.liabilities : [],
+        equity: Array.isArray(data.equity) ? data.equity : [],
+        revenue: Array.isArray(data.revenue) ? data.revenue : [],
+        expenses: Array.isArray(data.expenses) ? data.expenses : []
+      };
+      
+      console.log('Chart Data:', chartData); // Debug log
+      console.log('Total accounts:', 
+        chartData.assets.length + 
+        chartData.liabilities.length + 
+        chartData.equity.length + 
+        chartData.revenue.length + 
+        chartData.expenses.length
+      ); // Debug log
+      
+      setChartOfAccounts(chartData);
       // Update cache
-      initializeAccountCache(response.data);
+      initializeAccountCache(chartData);
+      setLoading(false);
     } catch (error) {
       console.error('Error fetching accounts:', error);
+      console.error('Error details:', error.response?.data); // Debug log
+      // Set empty structure on error
+      setChartOfAccounts({
+        assets: [],
+        liabilities: [],
+        equity: [],
+        revenue: [],
+        expenses: []
+      });
       setLoading(false);
     }
   }, []);
@@ -135,6 +166,19 @@ const ChartOfAccounts = ({ onRefresh }) => {
     return names[type] || type;
   };
 
+  // Ensure chartOfAccounts is never null
+  if (!chartOfAccounts) {
+    // If null, initialize with empty structure
+    const emptyChart = {
+      assets: [],
+      liabilities: [],
+      equity: [],
+      revenue: [],
+      expenses: []
+    };
+    setChartOfAccounts(emptyChart);
+  }
+
   if (loading) {
     return <div className="loading">Memuat data...</div>;
   }
@@ -237,7 +281,9 @@ const ChartOfAccounts = ({ onRefresh }) => {
       )}
 
       {categories.map(category => {
-        const accounts = chartOfAccounts[category.key] || [];
+        const accounts = (chartOfAccounts && chartOfAccounts[category.key]) ? chartOfAccounts[category.key] : [];
+        // Always show category section if there are accounts OR if we're showing form
+        // This ensures empty categories with data won't be hidden
         if (accounts.length === 0 && !showForm) return null;
 
         return (

@@ -42,6 +42,8 @@ const getChartOfAccounts = async () => {
     // Ensure accounts is an array
     const accountsArray = Array.isArray(accounts) ? accounts : [];
     
+    console.log(`[getChartOfAccounts] Found ${accountsArray.length} accounts in database`); // Debug log
+    
     const result = {
       assets: [],
       liabilities: [],
@@ -81,9 +83,18 @@ const getChartOfAccounts = async () => {
       }
     });
     
+    console.log(`[getChartOfAccounts] Returning:`, {
+      assets: result.assets.length,
+      liabilities: result.liabilities.length,
+      equity: result.equity.length,
+      revenue: result.revenue.length,
+      expenses: result.expenses.length
+    }); // Debug log
+    
     return result;
   } catch (error) {
     console.error('Error getting chart of accounts:', error);
+    console.error('Error stack:', error.stack); // Debug log
     return defaultResult;
   }
 };

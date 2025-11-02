@@ -851,12 +851,89 @@ const calculateReports = async () => {
   const totalEquity = initialCapital + retainedEarnings + netIncome;
   
   // S7 - Statement of Changes in Equity
-  const initialAminCapital = 60000000;
-  const initialFawziCapital = 40000000;
-  const totalInitialCapital = initialAminCapital + initialFawziCapital;
-  
+  // Get actual capital balances from database (not hardcoded)
+  const aminCapitalBalance = balances['3-101'] ? balances['3-101'].balance : 0;
+  const fawziCapitalBalance = balances['3-102'] ? balances['3-102'].balance : 0;
   const retainedEarningsBalance = balances['3-200'] ? balances['3-200'].balance : 0;
-  const finalRetainedEarnings = retainedEarningsBalance + netIncome;
+  
+  // Calculate initial capital
+  // For equity accounts: if there are no debits (prive), the current balance IS the initial capital
+  // If there are debits (prive), we need to add them back to get initial capital
+  
+  // Get all debit and credit amounts for capital accounts from transactions and adjustments
+  let aminDebits = 0;
+  let aminCredits = 0;
+  let fawziDebits = 0;
+  let fawziCredits = 0;
+  
+  // Check transactions
+  const transactions = await getTransactions();
+  if (Array.isArray(transactions)) {
+    transactions.forEach(trans => {
+      if (Array.isArray(trans.entries)) {
+        trans.entries.forEach(entry => {
+          if (entry.account === '3-101') {
+            aminDebits += entry.debit || 0;
+            aminCredits += entry.credit || 0;
+          } else if (entry.account === '3-102') {
+            fawziDebits += entry.debit || 0;
+            fawziCredits += entry.credit || 0;
+          }
+        });
+      }
+    });
+  }
+  
+  // Check adjusting entries
+  const adjustments = await getAdjustingEntries();
+  if (Array.isArray(adjustments)) {
+    adjustments.forEach(adj => {
+      if (Array.isArray(adj.entries)) {
+        adj.entries.forEach(entry => {
+          if (entry.account === '3-101') {
+            aminDebits += entry.debit || 0;
+            aminCredits += entry.credit || 0;
+          } else if (entry.account === '3-102') {
+            fawziDebits += entry.debit || 0;
+            fawziCredits += entry.credit || 0;
+          }
+        });
+      }
+    });
+  }
+  
+  // Calculate initial capital
+  // Formula: Initial Capital = Current Balance - (Credits - Debits)
+  // For equity: Credits increase balance, Debits decrease balance
+  // So to reverse: Initial = Current - (Credits - Debits)
+  // Which simplifies to: Initial = Current - Credits + Debits
+  
+  // However, if balance equals credits (meaning all balance came from transactions),
+  // and there are no debits, we treat the credits as initial capital
+  // This handles the case where initial capital was entered as a transaction
+  
+  let initialAminCapital;
+  if (aminDebits === 0 && aminCredits > 0 && aminCapitalBalance === aminCredits) {
+    // All balance came from credits, treat credits as initial capital
+    initialAminCapital = aminCredits;
+  } else {
+    // Standard calculation: reverse transactions to get initial
+    initialAminCapital = aminCapitalBalance - aminCredits + aminDebits;
+  }
+  
+  let initialFawziCapital;
+  if (fawziDebits === 0 && fawziCredits > 0 && fawziCapitalBalance === fawziCredits) {
+    // All balance came from credits, treat credits as initial capital
+    initialFawziCapital = fawziCredits;
+  } else {
+    // Standard calculation: reverse transactions to get initial
+    initialFawziCapital = fawziCapitalBalance - fawziCredits + fawziDebits;
+  }
+  
+  // Ensure initial capital is not negative (minimum 0)
+  initialAminCapital = Math.max(0, initialAminCapital);
+  initialFawziCapital = Math.max(0, initialFawziCapital);
+  const totalInitialCapital = initialAminCapital + initialFawziCapital;
   
   const equityChanges = [
     {

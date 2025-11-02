@@ -93,7 +93,7 @@ const ChangesInEquity = ({ reports, metadata }) => {
         Ekuitas Akhir = Ekuitas Awal + Laba/Rugi Bersih
         <br />
         {formatCurrency(equityChanges[equityChanges.length - 1].amount)} = {' '}
-        {formatCurrency(equityChanges.slice(0, -2).reduce((sum, item) => sum + item.amount, 0))} + {' '}
+        {formatCurrency(equityChanges.find(item => item.description === 'Total Modal Awal')?.amount || 0)} + {' '}
         {formatCurrency(equityChanges[equityChanges.length - 2].amount)}
       </div>
     </div>

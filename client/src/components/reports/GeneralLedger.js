@@ -106,18 +106,6 @@ const GeneralLedger = ({ transactions, adjustingEntries, onNextStage, metadata }
         </p>
       )}
       
-      <div className="action-buttons">
-        {onNextStage && (
-          <button 
-            onClick={onNextStage} 
-            className="btn-success"
-            style={{ backgroundColor: '#28a745', color: 'white', marginBottom: '20px' }}
-          >
-            ➜ Proses ke Tahap Selanjutnya (S3 - Neraca Saldo)
-          </button>
-        )}
-      </div>
-      
       {ledgerData.map((account, idx) => (
         <div key={idx} style={{ marginBottom: '40px' }}>
           <h3 style={{ marginBottom: '10px', color: '#4a90e2' }}>
@@ -167,6 +155,18 @@ const GeneralLedger = ({ transactions, adjustingEntries, onNextStage, metadata }
           </div>
         </div>
       ))}
+      
+      <div className="action-buttons" style={{ marginTop: '40px' }}>
+        {onNextStage && (
+          <button 
+            onClick={onNextStage} 
+            className="btn-success"
+            style={{ backgroundColor: '#28a745', color: 'white' }}
+          >
+            ➜ Proses ke Tahap Selanjutnya (S3 - Neraca Saldo)
+          </button>
+        )}
+      </div>
     </div>
   );
 };

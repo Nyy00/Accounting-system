@@ -27,18 +27,6 @@ const FinancialPosition = ({ reports, onNextStage, metadata }) => {
         </p>
       )}
       
-      <div className="action-buttons">
-        {onNextStage && (
-          <button 
-            onClick={onNextStage} 
-            className="btn-success"
-            style={{ backgroundColor: '#28a745', color: 'white', marginBottom: '20px' }}
-          >
-            ➜ Proses ke Tahap Selanjutnya (S7 - Laporan Perubahan Ekuitas)
-          </button>
-        )}
-      </div>
-      
       <div className="table-container">
         <table className="accounting-table">
           <thead>
@@ -217,6 +205,18 @@ const FinancialPosition = ({ reports, onNextStage, metadata }) => {
         Aktiva = Kewajiban + Ekuitas
         <br />
         {formatCurrency(totalAssets)} = {formatCurrency(totalLiabilities)} + {formatCurrency(totalEquity)}
+      </div>
+      
+      <div className="action-buttons" style={{ marginTop: '20px' }}>
+        {onNextStage && (
+          <button 
+            onClick={onNextStage} 
+            className="btn-success"
+            style={{ backgroundColor: '#28a745', color: 'white' }}
+          >
+            ➜ Proses ke Tahap Selanjutnya (S7 - Laporan Perubahan Ekuitas)
+          </button>
+        )}
       </div>
     </div>
   );

@@ -27,18 +27,6 @@ const TrialBalance = ({ reports, onNextStage, metadata }) => {
         </p>
       )}
       
-      <div className="action-buttons">
-        {onNextStage && (
-          <button 
-            onClick={onNextStage} 
-            className="btn-success"
-            style={{ backgroundColor: '#28a745', color: 'white', marginBottom: '20px' }}
-          >
-            ➜ Proses ke Tahap Selanjutnya (S4 - Neraca Saldo Setelah Penyesuaian)
-          </button>
-        )}
-      </div>
-      
       <div className="table-container">
         <table className="accounting-table">
           <thead>
@@ -69,6 +57,18 @@ const TrialBalance = ({ reports, onNextStage, metadata }) => {
       
       <div style={{ marginTop: '20px', padding: '15px', backgroundColor: '#e8f4f8', borderRadius: '6px' }}>
         <strong>Rumus:</strong> Total Debit = Total Kredit = {formatCurrency(totalDebit)}
+      </div>
+      
+      <div className="action-buttons" style={{ marginTop: '20px' }}>
+        {onNextStage && (
+          <button 
+            onClick={onNextStage} 
+            className="btn-success"
+            style={{ backgroundColor: '#28a745', color: 'white' }}
+          >
+            ➜ Proses ke Tahap Selanjutnya (S4 - Neraca Saldo Setelah Penyesuaian)
+          </button>
+        )}
       </div>
     </div>
   );

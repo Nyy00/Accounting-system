@@ -81,18 +81,6 @@ const AdjustedTrialBalance = ({ reports, adjustingEntries, onRefresh, onNextStag
 
   const renderReport = () => (
     <>
-      <div className="action-buttons" style={{ marginBottom: '20px' }}>
-        {onNextStage && (
-          <button 
-            onClick={onNextStage} 
-            className="btn-success"
-            style={{ backgroundColor: '#28a745', color: 'white' }}
-          >
-            ➜ Proses ke Tahap Selanjutnya (S5 - Laporan Laba Rugi)
-          </button>
-        )}
-      </div>
-      
       {localAdjustingEntries && localAdjustingEntries.length > 0 && (
         <div style={{ marginBottom: '20px', padding: '15px', backgroundColor: '#fff9e6', borderRadius: '6px', border: '1px solid #ffd700' }}>
           <h3 style={{ marginBottom: '10px', color: '#b8860b' }}>Jurnal Penyesuaian:</h3>
@@ -141,6 +129,18 @@ const AdjustedTrialBalance = ({ reports, adjustingEntries, onRefresh, onNextStag
         <strong>Rumus:</strong> Total Debit = Total Kredit = {formatCurrency(totalDebit)}
         <br />
         <strong>Catatan:</strong> Seluruh saldo setelah penyesuaian akan digunakan untuk membuat Laporan Laba Rugi dan Laporan Posisi Keuangan.
+      </div>
+      
+      <div className="action-buttons" style={{ marginTop: '20px' }}>
+        {onNextStage && (
+          <button 
+            onClick={onNextStage} 
+            className="btn-success"
+            style={{ backgroundColor: '#28a745', color: 'white' }}
+          >
+            ➜ Proses ke Tahap Selanjutnya (S5 - Laporan Laba Rugi)
+          </button>
+        )}
       </div>
     </>
   );

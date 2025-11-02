@@ -27,18 +27,6 @@ const IncomeStatement = ({ reports, onNextStage, metadata }) => {
         </p>
       )}
       
-      <div className="action-buttons">
-        {onNextStage && (
-          <button 
-            onClick={onNextStage} 
-            className="btn-success"
-            style={{ backgroundColor: '#28a745', color: 'white', marginBottom: '20px' }}
-          >
-            ➜ Proses ke Tahap Selanjutnya (S6 - Laporan Posisi Keuangan)
-          </button>
-        )}
-      </div>
-      
       <div className="table-container">
         <table className="accounting-table">
           <thead>
@@ -102,6 +90,18 @@ const IncomeStatement = ({ reports, onNextStage, metadata }) => {
         Laba/Rugi Bersih = Total Pendapatan - Total Beban
         <br />
         Laba/Rugi Bersih = {formatCurrency(totalRevenue)} - {formatCurrency(totalExpenses)} = {formatCurrency(netIncome)}
+      </div>
+      
+      <div className="action-buttons" style={{ marginTop: '20px' }}>
+        {onNextStage && (
+          <button 
+            onClick={onNextStage} 
+            className="btn-success"
+            style={{ backgroundColor: '#28a745', color: 'white' }}
+          >
+            ➜ Proses ke Tahap Selanjutnya (S6 - Laporan Posisi Keuangan)
+          </button>
+        )}
       </div>
     </div>
   );

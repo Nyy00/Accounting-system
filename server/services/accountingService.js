@@ -114,20 +114,29 @@ const addAccount = async (account) => {
   const existing = isAsyncDb() ? await existingPromise : existingPromise;
   
   if (existing) {
+    console.log(`[addAccount] Account ${code} already exists in database`);
     throw new Error(`Account code ${code} already exists`);
   }
   
   // Insert new account
   try {
+    console.log(`[addAccount] Inserting account: ${code}, ${name}, ${type}`);
     const runPromise = database.prepare(`
       INSERT INTO chart_of_accounts (code, name, type, is_contra)
       VALUES (?, ?, ?, ?)
     `).run(code, name, type, isContra ? 1 : 0);
     
-    await runQuery(() => runPromise);
+    const result = await runQuery(() => runPromise);
+    console.log(`[addAccount] Insert result:`, result);
+    
+    // Verify the account was inserted
+    const verifyPromise = database.prepare('SELECT * FROM chart_of_accounts WHERE code = ?').get(code);
+    const verified = isAsyncDb() ? await verifyPromise : verifyPromise;
+    console.log(`[addAccount] Verified account exists:`, verified ? 'YES' : 'NO');
     
     return { code, name, type, isContra: isContra || false };
   } catch (error) {
+    console.error(`[addAccount] Error inserting account ${code}:`, error);
     throw new Error(`Failed to add account: ${error.message}`);
   }
 };

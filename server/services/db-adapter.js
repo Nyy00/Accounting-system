@@ -11,7 +11,10 @@ let dbType = 'none';
 if (process.env.DATABASE_URL && process.env.DATABASE_URL.includes('neon.tech')) {
   try {
     const { neon } = require('@neondatabase/serverless');
-    const sql = neon(process.env.DATABASE_URL);
+    const dbUrl = process.env.DATABASE_URL;
+    console.log('🔗 Connecting to Neon database...');
+    console.log('📋 DATABASE_URL preview:', dbUrl.substring(0, 50) + '...' + dbUrl.substring(dbUrl.length - 20));
+    const sql = neon(dbUrl);
     
     // Create adapter that mimics SQLite API
     db = {
@@ -30,17 +33,32 @@ if (process.env.DATABASE_URL && process.env.DATABASE_URL.includes('neon.tech')) 
                 const insertMatch = convertedQuery.match(/INSERT INTO\s+(\w+)/i);
                 if (insertMatch) {
                   modifiedQuery = convertedQuery + ' RETURNING id';
+                  console.log(`[Neon] Modified INSERT query to include RETURNING id`);
                 }
               }
               
+              console.log(`[Neon] Executing query:`, modifiedQuery.substring(0, 100) + '...');
+              console.log(`[Neon] Params:`, params);
+              
               const result = await sql(modifiedQuery, params);
+              
+              console.log(`[Neon] Query result:`, {
+                rows: result?.length || 0,
+                firstRow: result?.[0] || null,
+                rowCount: result?.rowCount || null
+              });
               
               return {
                 lastInsertRowid: result[0]?.id || null,
                 changes: Array.isArray(result) ? result.length : (result.rowCount || 0)
               };
             } catch (error) {
-              console.error('Neon query error:', error);
+              console.error('[Neon] Query error:', error);
+              console.error('[Neon] Error details:', {
+                message: error.message,
+                code: error.code,
+                detail: error.detail
+              });
               throw error;
             }
           },

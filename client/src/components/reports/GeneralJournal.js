@@ -35,19 +35,18 @@ const GeneralJournal = ({ transactions, onRefresh, onNextStage, metadata }) => {
 
   const handleDeleteClick = async (transactionId) => {
     if (window.confirm('Apakah Anda yakin ingin menghapus transaksi ini?')) {
-      // Optimistically remove from UI immediately (real-time update)
-      setLocalTransactions(prev => prev.filter(t => t.id !== transactionId));
-      
       try {
-        await axios.delete(`${API_URL}/api/accounting/transactions/${transactionId}`);
-        // Refresh to sync with server and update other components
-        if (onRefresh) {
+        const response = await axios.delete(`${API_URL}/api/accounting/transactions/${transactionId}`);
+        // Update local state immediately with response data
+        if (response.data && response.data.transactions) {
+          setLocalTransactions(response.data.transactions);
+        } else if (onRefresh) {
           onRefresh();
         }
       } catch (error) {
-        // On error, restore the transaction and show error
+        // On error, refresh to get correct state from server
         if (onRefresh) {
-          onRefresh(); // Refresh to get correct state from server
+          onRefresh();
         }
         alert('Gagal menghapus transaksi: ' + (error.response?.data?.error || error.message));
       }
@@ -59,9 +58,23 @@ const GeneralJournal = ({ transactions, onRefresh, onNextStage, metadata }) => {
     setEditingTransaction(null);
   };
 
-  const handleFormSave = () => {
+  const handleFormSave = (responseData) => {
     setShowForm(false);
     setEditingTransaction(null);
+    
+    // Update local state immediately if response contains updated list
+    if (responseData) {
+      if (responseData.transactions) {
+        setLocalTransactions(responseData.transactions);
+      } else if (responseData.adjustingEntries) {
+        // For adjusting entries, trigger parent refresh
+        if (onRefresh) {
+          onRefresh();
+        }
+      }
+    }
+    
+    // Always refresh parent to sync other components
     if (onRefresh) {
       onRefresh();
     }

@@ -1,28 +1,17 @@
-const Database = require('better-sqlite3');
-const path = require('path');
-const fs = require('fs');
+// Use db-adapter for Vercel compatibility
+const { getDatabase: getDbFromAdapter, initializeSchema: initSchema, getDbType } = require('./db-adapter');
 
-// Database file path
-const DATA_DIR = process.env.DATA_DIR || (
-  process.env.VERCEL ? '/tmp' : path.join(__dirname, '../../data')
-);
-
-// Ensure data directory exists
-if (!fs.existsSync(DATA_DIR)) {
-  fs.mkdirSync(DATA_DIR, { recursive: true });
-}
-
-const DB_PATH = path.join(DATA_DIR, 'accounting.db');
-
-// Initialize database connection
-let db;
+// For backward compatibility, export the same interface
+let db = null;
 
 const getDatabase = () => {
   if (!db) {
-    db = new Database(DB_PATH);
-    // Enable foreign keys
-    db.pragma('foreign_keys = ON');
-    initializeSchema();
+    db = getDbFromAdapter();
+    // Initialize schema if using SQLite
+    const dbType = getDbType();
+    if (dbType.includes('sqlite')) {
+      initSchema();
+    }
   }
   return db;
 };

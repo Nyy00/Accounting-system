@@ -13,13 +13,15 @@ const {
   updateAdjustingEntry,
   addAccount,
   updateAccount,
-  deleteAccount
+  deleteAccount,
+  getMetadata,
+  updateMetadata
 } = require('../services/accountingService');
 
 // Get chart of accounts
-router.get('/chart-of-accounts', (req, res) => {
+router.get('/chart-of-accounts', async (req, res) => {
   try {
-    const accounts = getChartOfAccounts();
+    const accounts = await getChartOfAccounts();
     res.json(accounts);
   } catch (error) {
     res.status(500).json({ error: error.message });
@@ -27,11 +29,11 @@ router.get('/chart-of-accounts', (req, res) => {
 });
 
 // Add new account
-router.post('/accounts', (req, res) => {
+router.post('/accounts', async (req, res) => {
   try {
-    const account = addAccount(req.body);
+    const account = await addAccount(req.body);
     // Return the updated chart of accounts so client can update immediately
-    const chartOfAccounts = getChartOfAccounts();
+    const chartOfAccounts = await getChartOfAccounts();
     res.json({ account, chartOfAccounts });
   } catch (error) {
     res.status(400).json({ error: error.message });
@@ -39,12 +41,12 @@ router.post('/accounts', (req, res) => {
 });
 
 // Update account
-router.put('/accounts/:code', (req, res) => {
+router.put('/accounts/:code', async (req, res) => {
   try {
     const code = decodeURIComponent(req.params.code);
-    const account = updateAccount(code, req.body);
+    const account = await updateAccount(code, req.body);
     // Return the updated chart of accounts so client can update immediately
-    const chartOfAccounts = getChartOfAccounts();
+    const chartOfAccounts = await getChartOfAccounts();
     res.json({ account, chartOfAccounts });
   } catch (error) {
     res.status(400).json({ error: error.message });
@@ -52,12 +54,12 @@ router.put('/accounts/:code', (req, res) => {
 });
 
 // Delete account
-router.delete('/accounts/:code', (req, res) => {
+router.delete('/accounts/:code', async (req, res) => {
   try {
     const code = decodeURIComponent(req.params.code);
-    deleteAccount(code);
+    await deleteAccount(code);
     // Return the updated chart of accounts so client can update immediately
-    const chartOfAccounts = getChartOfAccounts();
+    const chartOfAccounts = await getChartOfAccounts();
     res.json({ success: true, chartOfAccounts });
   } catch (error) {
     res.status(400).json({ error: error.message });
@@ -65,9 +67,9 @@ router.delete('/accounts/:code', (req, res) => {
 });
 
 // Get transactions
-router.get('/transactions', (req, res) => {
+router.get('/transactions', async (req, res) => {
   try {
-    const transactions = getTransactions();
+    const transactions = await getTransactions();
     res.json(transactions);
   } catch (error) {
     res.status(500).json({ error: error.message });
@@ -78,7 +80,9 @@ router.get('/transactions', (req, res) => {
 router.post('/transactions', (req, res) => {
   try {
     const transaction = addTransaction(req.body);
-    res.json(transaction);
+    // Return updated transactions list for real-time sync
+    const transactions = getTransactions();
+    res.json({ transaction, transactions });
   } catch (error) {
     res.status(400).json({ error: error.message });
   }
@@ -88,7 +92,9 @@ router.post('/transactions', (req, res) => {
 router.put('/transactions/:id', (req, res) => {
   try {
     const transaction = updateTransaction(parseInt(req.params.id), req.body);
-    res.json(transaction);
+    // Return updated transactions list for real-time sync
+    const transactions = getTransactions();
+    res.json({ transaction, transactions });
   } catch (error) {
     res.status(400).json({ error: error.message });
   }
@@ -98,16 +104,18 @@ router.put('/transactions/:id', (req, res) => {
 router.delete('/transactions/:id', (req, res) => {
   try {
     deleteTransaction(parseInt(req.params.id));
-    res.json({ success: true });
+    // Return updated transactions list for real-time sync
+    const transactions = getTransactions();
+    res.json({ success: true, transactions });
   } catch (error) {
     res.status(400).json({ error: error.message });
   }
 });
 
 // Get adjusting entries
-router.get('/adjusting-entries', (req, res) => {
+router.get('/adjusting-entries', async (req, res) => {
   try {
-    const entries = getAdjustingEntries();
+    const entries = await getAdjustingEntries();
     res.json(entries);
   } catch (error) {
     res.status(500).json({ error: error.message });
@@ -118,7 +126,9 @@ router.get('/adjusting-entries', (req, res) => {
 router.post('/adjusting-entries', (req, res) => {
   try {
     const entry = addAdjustingEntry(req.body);
-    res.json(entry);
+    // Return updated adjusting entries list for real-time sync
+    const adjustingEntries = getAdjustingEntries();
+    res.json({ entry, adjustingEntries });
   } catch (error) {
     res.status(400).json({ error: error.message });
   }
@@ -128,7 +138,9 @@ router.post('/adjusting-entries', (req, res) => {
 router.put('/adjusting-entries/:id', (req, res) => {
   try {
     const entry = updateAdjustingEntry(parseInt(req.params.id), req.body);
-    res.json(entry);
+    // Return updated adjusting entries list for real-time sync
+    const adjustingEntries = getAdjustingEntries();
+    res.json({ entry, adjustingEntries });
   } catch (error) {
     res.status(400).json({ error: error.message });
   }
@@ -138,19 +150,41 @@ router.put('/adjusting-entries/:id', (req, res) => {
 router.delete('/adjusting-entries/:id', (req, res) => {
   try {
     deleteAdjustingEntry(parseInt(req.params.id));
-    res.json({ success: true });
+    // Return updated adjusting entries list for real-time sync
+    const adjustingEntries = getAdjustingEntries();
+    res.json({ success: true, adjustingEntries });
   } catch (error) {
     res.status(400).json({ error: error.message });
   }
 });
 
 // Get all reports
-router.get('/reports', (req, res) => {
+router.get('/reports', async (req, res) => {
   try {
-    const reports = calculateReports();
+    const reports = await calculateReports();
     res.json(reports);
   } catch (error) {
     res.status(500).json({ error: error.message });
+  }
+});
+
+// Get metadata
+router.get('/metadata', async (req, res) => {
+  try {
+    const metadata = await getMetadata();
+    res.json(metadata);
+  } catch (error) {
+    res.status(500).json({ error: error.message });
+  }
+});
+
+// Update metadata
+router.put('/metadata', (req, res) => {
+  try {
+    const metadata = updateMetadata(req.body);
+    res.json(metadata);
+  } catch (error) {
+    res.status(400).json({ error: error.message });
   }
 });
 

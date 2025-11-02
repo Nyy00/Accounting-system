@@ -60,10 +60,14 @@ const AdjustedTrialBalance = ({ reports, adjustingEntries, onRefresh, onNextStag
     setEditingEntry(null);
   };
 
-  const handleFormSave = () => {
+  const handleFormSave = (responseData) => {
     setShowAdjustingForm(false);
     setEditingEntry(null);
-    if (onRefresh) {
+    
+    // Update parent if response contains updated list
+    if (responseData && responseData.adjustingEntries && onRefresh) {
+      onRefresh();
+    } else if (onRefresh) {
       onRefresh();
     }
   };

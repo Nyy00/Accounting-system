@@ -28,21 +28,30 @@ function App() {
 
   const fetchData = async () => {
     try {
-      const [transRes, adjRes, reportsRes, coaRes] = await Promise.all([
+      setLoading(true);
+      const [transRes, adjRes, reportsRes, coaRes, metaRes] = await Promise.all([
         axios.get(`${API_URL}/api/accounting/transactions`),
         axios.get(`${API_URL}/api/accounting/adjusting-entries`),
         axios.get(`${API_URL}/api/accounting/reports`),
-        axios.get(`${API_URL}/api/accounting/chart-of-accounts`)
+        axios.get(`${API_URL}/api/accounting/chart-of-accounts`),
+        axios.get(`${API_URL}/api/accounting/metadata`).catch(() => ({ data: null }))
       ]);
       
-      setTransactions(transRes.data);
-      setAdjustingEntries(adjRes.data);
+      // Ensure data is array, not null/undefined
+      setTransactions(Array.isArray(transRes.data) ? transRes.data : []);
+      setAdjustingEntries(Array.isArray(adjRes.data) ? adjRes.data : []);
       setReports(reportsRes.data);
       // Initialize account name cache
       initializeAccountCache(coaRes.data);
+      if (metaRes.data) {
+        setMetadata(metaRes.data);
+      }
       setLoading(false);
     } catch (error) {
       console.error('Error fetching data:', error);
+      // Set defaults on error
+      setTransactions([]);
+      setAdjustingEntries([]);
       setLoading(false);
     }
   };

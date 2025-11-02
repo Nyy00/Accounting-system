@@ -115,13 +115,15 @@ const TransactionForm = ({ onSave, onCancel, editingTransaction = null, type = '
 
       const endpoint = type === 'adjusting' ? 'adjusting-entries' : 'transactions';
       
+      let response;
       if (editingTransaction) {
-        await axios.put(`${API_URL}/api/accounting/${endpoint}/${editingTransaction.id}`, transactionData);
+        response = await axios.put(`${API_URL}/api/accounting/${endpoint}/${editingTransaction.id}`, transactionData);
       } else {
-        await axios.post(`${API_URL}/api/accounting/${endpoint}`, transactionData);
+        response = await axios.post(`${API_URL}/api/accounting/${endpoint}`, transactionData);
       }
       
-      onSave();
+      // Pass response data to onSave callback if available
+      onSave(response.data);
     } catch (error) {
       const errorMsg = type === 'adjusting' ? 'Gagal menyimpan jurnal penyesuaian' : 'Gagal menyimpan transaksi';
       setError(error.response?.data?.error || errorMsg);

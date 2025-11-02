@@ -1,12 +1,36 @@
 const { getDatabase } = require('./database');
+const { getDbType } = require('./db-adapter');
 
 // Helper to get database connection
 const db = () => getDatabase();
 
+// Helper to check if database is async (Postgres)
+const isAsyncDb = () => {
+  try {
+    const dbType = getDbType();
+    return dbType === 'postgres' || dbType === 'supabase';
+  } catch {
+    return false;
+  }
+};
+
+// Helper to run query (sync for SQLite, async for Postgres)
+const runQuery = async (queryFn) => {
+  if (isAsyncDb()) {
+    return await queryFn();
+  } else {
+    return queryFn();
+  }
+};
+
 // Chart of Accounts - Get all accounts grouped by type
-const getChartOfAccounts = () => {
+const getChartOfAccounts = async () => {
   const database = db();
-  const accounts = database.prepare('SELECT * FROM chart_of_accounts ORDER BY code').all();
+  const accountsPromise = database.prepare('SELECT * FROM chart_of_accounts ORDER BY code').all();
+  const accounts = isAsyncDb() ? await accountsPromise : accountsPromise;
+  
+  // Ensure accounts is an array
+  const accountsArray = Array.isArray(accounts) ? accounts : [];
   
   const result = {
     assets: [],
@@ -16,7 +40,7 @@ const getChartOfAccounts = () => {
     expenses: []
   };
   
-  accounts.forEach(acc => {
+  accountsArray.forEach(acc => {
     const account = {
       code: acc.code,
       name: acc.name,
@@ -139,31 +163,40 @@ const deleteAccount = (code) => {
 const getTransactions = () => {
   const database = db();
   
-  const transactions = database.prepare(`
-    SELECT id, date, description 
-    FROM transactions 
-    ORDER BY date, id
-  `).all();
-  
-  return transactions.map(trans => {
-    const entries = database.prepare(`
-      SELECT account_code as account, debit, credit
-      FROM transaction_entries
-      WHERE transaction_id = ?
-      ORDER BY id
-    `).all(trans.id);
+  try {
+    const transactions = database.prepare(`
+      SELECT id, date, description 
+      FROM transactions 
+      ORDER BY date, id
+    `).all();
     
-    return {
-      id: trans.id,
-      date: trans.date,
-      description: trans.description,
-      entries: entries.map(e => ({
-        account: e.account,
-        debit: e.debit || 0,
-        credit: e.credit || 0
-      }))
-    };
-  });
+    if (!transactions || transactions.length === 0) {
+      return [];
+    }
+    
+    return transactions.map(trans => {
+      const entries = database.prepare(`
+        SELECT account_code as account, debit, credit
+        FROM transaction_entries
+        WHERE transaction_id = ?
+        ORDER BY id
+      `).all(trans.id);
+      
+      return {
+        id: trans.id,
+        date: trans.date,
+        description: trans.description,
+        entries: entries.map(e => ({
+          account: e.account,
+          debit: e.debit || 0,
+          credit: e.credit || 0
+        }))
+      };
+    });
+  } catch (error) {
+    console.error('Error getting transactions:', error);
+    return [];
+  }
 };
 
 const addTransaction = (transaction) => {
@@ -332,31 +365,40 @@ const deleteTransaction = (id) => {
 const getAdjustingEntries = () => {
   const database = db();
   
-  const entries = database.prepare(`
-    SELECT id, date, description 
-    FROM adjusting_entries 
-    ORDER BY date, id
-  `).all();
-  
-  return entries.map(entry => {
-    const entryEntries = database.prepare(`
-      SELECT account_code as account, debit, credit
-      FROM adjusting_entry_entries
-      WHERE adjusting_entry_id = ?
-      ORDER BY id
-    `).all(entry.id);
+  try {
+    const entries = database.prepare(`
+      SELECT id, date, description 
+      FROM adjusting_entries 
+      ORDER BY date, id
+    `).all();
     
-    return {
-      id: entry.id,
-      date: entry.date,
-      description: entry.description,
-      entries: entryEntries.map(e => ({
-        account: e.account,
-        debit: e.debit || 0,
-        credit: e.credit || 0
-      }))
-    };
-  });
+    if (!entries || entries.length === 0) {
+      return [];
+    }
+    
+    return entries.map(entry => {
+      const entryEntries = database.prepare(`
+        SELECT account_code as account, debit, credit
+        FROM adjusting_entry_entries
+        WHERE adjusting_entry_id = ?
+        ORDER BY id
+      `).all(entry.id);
+      
+      return {
+        id: entry.id,
+        date: entry.date,
+        description: entry.description,
+        entries: entryEntries.map(e => ({
+          account: e.account,
+          debit: e.debit || 0,
+          credit: e.credit || 0
+        }))
+      };
+    });
+  } catch (error) {
+    console.error('Error getting adjusting entries:', error);
+    return [];
+  }
 };
 
 const addAdjustingEntry = (entry) => {
@@ -707,18 +749,25 @@ const defaultMetadata = {
 const getMetadata = () => {
   const database = db();
   
-  const metadata = database.prepare('SELECT * FROM metadata').all();
-  const result = { ...defaultMetadata };
-  
-  metadata.forEach(row => {
-    try {
-      result[row.key] = JSON.parse(row.value);
-    } catch {
-      result[row.key] = row.value;
+  try {
+    const metadata = database.prepare('SELECT * FROM metadata').all();
+    const result = { ...defaultMetadata };
+    
+    if (metadata && metadata.length > 0) {
+      metadata.forEach(row => {
+        try {
+          result[row.key] = JSON.parse(row.value);
+        } catch {
+          result[row.key] = row.value;
+        }
+      });
     }
-  });
-  
-  return result;
+    
+    return result;
+  } catch (error) {
+    console.error('Error getting metadata:', error);
+    return { ...defaultMetadata };
+  }
 };
 
 const updateMetadata = (metadata) => {

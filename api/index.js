@@ -40,15 +40,15 @@ module.exports = async (req, res) => {
     // GET endpoints
     if (req.method === 'GET') {
       if (path === '/accounting/transactions') {
-        data = getTransactions();
+        data = await getTransactions();
       } else if (path === '/accounting/adjusting-entries') {
-        data = getAdjustingEntries();
+        data = await getAdjustingEntries();
       } else if (path === '/accounting/chart-of-accounts') {
-        data = getChartOfAccounts();
+        data = await getChartOfAccounts();
       } else if (path === '/accounting/reports') {
-        data = calculateReports();
+        data = await calculateReports();
       } else if (path === '/accounting/metadata') {
-        data = getMetadata();
+        data = await getMetadata();
       } else {
         res.status(404).json({ error: 'Not found' });
         return;
@@ -60,16 +60,17 @@ module.exports = async (req, res) => {
     // POST endpoints
     if (req.method === 'POST') {
       if (path === '/accounting/transactions') {
-        data = addTransaction(req.body);
+        data = await addTransaction(req.body);
         res.status(201).json(data);
         return;
       } else if (path === '/accounting/adjusting-entries') {
-        data = addAdjustingEntry(req.body);
+        data = await addAdjustingEntry(req.body);
         res.status(201).json(data);
         return;
       } else if (path === '/accounting/accounts') {
-        data = addAccount(req.body);
-        res.status(201).json(data);
+        data = await addAccount(req.body);
+        const chartOfAccounts = await getChartOfAccounts();
+        res.status(201).json({ account: data, chartOfAccounts });
         return;
       } else {
         res.status(404).json({ error: 'Not found' });
@@ -80,7 +81,7 @@ module.exports = async (req, res) => {
     // PUT endpoints
     if (req.method === 'PUT') {
       if (path === '/accounting/metadata') {
-        data = updateMetadata(req.body);
+        data = await updateMetadata(req.body);
         res.status(200).json(data);
         return;
       }
@@ -89,8 +90,9 @@ module.exports = async (req, res) => {
       const accountMatch = path.match(/\/accounting\/accounts\/(.+)/);
       if (accountMatch) {
         const code = decodeURIComponent(accountMatch[1]);
-        data = updateAccount(code, req.body);
-        res.status(200).json(data);
+        data = await updateAccount(code, req.body);
+        const chartOfAccounts = await getChartOfAccounts();
+        res.status(200).json({ account: data, chartOfAccounts });
         return;
       }
       
@@ -99,9 +101,9 @@ module.exports = async (req, res) => {
         const type = match[1];
         const id = parseInt(match[2]);
         if (type === 'transactions') {
-          data = updateTransaction(id, req.body);
+          data = await updateTransaction(id, req.body);
         } else if (type === 'adjusting-entries') {
-          data = updateAdjustingEntry(id, req.body);
+          data = await updateAdjustingEntry(id, req.body);
         }
         res.status(200).json(data);
         return;
@@ -117,8 +119,9 @@ module.exports = async (req, res) => {
       const accountMatch = path.match(/\/accounting\/accounts\/(.+)/);
       if (accountMatch) {
         const code = decodeURIComponent(accountMatch[1]);
-        deleteAccount(code);
-        res.status(200).json({ success: true });
+        await deleteAccount(code);
+        const chartOfAccounts = await getChartOfAccounts();
+        res.status(200).json({ success: true, chartOfAccounts });
         return;
       }
       
@@ -127,11 +130,14 @@ module.exports = async (req, res) => {
         const type = match[1];
         const id = parseInt(match[2]);
         if (type === 'transactions') {
-          deleteTransaction(id);
+          await deleteTransaction(id);
+          const transactions = await getTransactions();
+          res.status(200).json({ success: true, transactions });
         } else if (type === 'adjusting-entries') {
-          deleteAdjustingEntry(id);
+          await deleteAdjustingEntry(id);
+          const adjustingEntries = await getAdjustingEntries();
+          res.status(200).json({ success: true, adjustingEntries });
         }
-        res.status(200).json({ success: true });
         return;
       } else {
         res.status(404).json({ error: 'Not found' });

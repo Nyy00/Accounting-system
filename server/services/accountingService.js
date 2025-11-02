@@ -1,3 +1,185 @@
+const fs = require('fs');
+const path = require('path');
+
+// File paths for data persistence
+// For Vercel, use /tmp (but note: /tmp is not persistent across deployments)
+// For local development, use data/ folder
+const DATA_DIR = process.env.DATA_DIR || (
+  process.env.VERCEL ? '/tmp/accounting-data' : path.join(__dirname, '../../data')
+);
+const TRANSACTIONS_FILE = path.join(DATA_DIR, 'transactions.json');
+const ADJUSTING_ENTRIES_FILE = path.join(DATA_DIR, 'adjusting-entries.json');
+const STATE_FILE = path.join(DATA_DIR, 'state.json');
+
+// Ensure data directory exists
+if (!fs.existsSync(DATA_DIR)) {
+  fs.mkdirSync(DATA_DIR, { recursive: true });
+}
+
+// Helper functions for file operations
+const readJsonFile = (filePath, defaultValue = null) => {
+  try {
+    if (fs.existsSync(filePath)) {
+      const data = fs.readFileSync(filePath, 'utf8');
+      return JSON.parse(data);
+    }
+  } catch (error) {
+    console.error(`Error reading ${filePath}:`, error);
+  }
+  return defaultValue;
+};
+
+const writeJsonFile = (filePath, data) => {
+  try {
+    fs.writeFileSync(filePath, JSON.stringify(data, null, 2), 'utf8');
+    return true;
+  } catch (error) {
+    console.error(`Error writing ${filePath}:`, error);
+    return false;
+  }
+};
+
+// Load data from files on startup
+const loadData = () => {
+  const defaultTransactions = [
+    {
+      id: 1,
+      date: '2024-01-01',
+      description: 'Setoran modal awal oleh Bapak Amin dan Fawzi',
+      entries: [
+        { account: '1-110', debit: 100000000, credit: 0 },
+        { account: '3-101', debit: 0, credit: 60000000 },
+        { account: '3-102', debit: 0, credit: 40000000 }
+      ]
+    },
+    {
+      id: 2,
+      date: '2024-01-01',
+      description: 'Membayar sewa kantor untuk 1 tahun',
+      entries: [
+        { account: '1-150', debit: 24000000, credit: 0 },
+        { account: '1-110', debit: 0, credit: 24000000 }
+      ]
+    },
+    {
+      id: 3,
+      date: '2024-01-01',
+      description: 'Membeli mobil senilai Rp200 juta',
+      entries: [
+        { account: '1-230', debit: 200000000, credit: 0 },
+        { account: '1-110', debit: 0, credit: 40000000 },
+        { account: '2-210', debit: 0, credit: 160000000 }
+      ]
+    },
+    {
+      id: 4,
+      date: '2024-01-02',
+      description: 'Membeli perlengkapan kantor',
+      entries: [
+        { account: '1-140', debit: 10000000, credit: 0 },
+        { account: '1-110', debit: 0, credit: 10000000 }
+      ]
+    },
+    {
+      id: 5,
+      date: '2024-01-02',
+      description: 'Mengambil uang untuk kas kecil',
+      entries: [
+        { account: '1-100', debit: 1000000, credit: 0 },
+        { account: '1-110', debit: 0, credit: 1000000 }
+      ]
+    },
+    {
+      id: 6,
+      date: '2024-01-04',
+      description: 'Menerima pembayaran awal jasa konsultasi dari PT HIJ',
+      entries: [
+        { account: '1-110', debit: 10000000, credit: 0 },
+        { account: '4-100', debit: 0, credit: 10000000 }
+      ]
+    },
+    {
+      id: 7,
+      date: '2024-01-31',
+      description: 'Menerima pembayaran akhir jasa konsultasi dari PT HIJ',
+      entries: [
+        { account: '1-110', debit: 20000000, credit: 0 },
+        { account: '4-100', debit: 0, credit: 20000000 }
+      ]
+    }
+  ];
+
+  const defaultAdjustingEntries = [
+    {
+      id: 1,
+      date: '2024-01-31',
+      description: 'Gaji pegawai belum dicatat',
+      entries: [
+        { account: '5-100', debit: 10000000, credit: 0 },
+        { account: '2-110', debit: 0, credit: 10000000 }
+      ]
+    },
+    {
+      id: 2,
+      date: '2024-01-31',
+      description: 'Tagihan listrik, air dan internet belum dicatat',
+      entries: [
+        { account: '5-120', debit: 5000000, credit: 0 },
+        { account: '2-120', debit: 0, credit: 5000000 }
+      ]
+    },
+    {
+      id: 3,
+      date: '2024-01-31',
+      description: 'Beban depresiasi kendaraan',
+      entries: [
+        { account: '5-130', debit: 1600000, credit: 0 },
+        { account: '1-240', debit: 0, credit: 1600000 }
+      ]
+    },
+    {
+      id: 4,
+      date: '2024-01-31',
+      description: 'Pemakaian perlengkapan kantor (10jt - 8jt = 2jt)',
+      entries: [
+        { account: '5-120', debit: 2000000, credit: 0 },
+        { account: '1-140', debit: 0, credit: 2000000 }
+      ]
+    },
+    {
+      id: 5,
+      date: '2024-01-31',
+      description: 'Beban sewa kantor untuk bulan Januari (24jt / 12)',
+      entries: [
+        { account: '5-110', debit: 2000000, credit: 0 },
+        { account: '1-150', debit: 0, credit: 2000000 }
+      ]
+    }
+  ];
+
+  const loadedTransactions = readJsonFile(TRANSACTIONS_FILE, defaultTransactions);
+  const loadedAdjustingEntries = readJsonFile(ADJUSTING_ENTRIES_FILE, defaultAdjustingEntries);
+  const state = readJsonFile(STATE_FILE, { nextTransactionId: 8, nextAdjustingEntryId: 6 });
+
+  // Initialize files if they don't exist
+  if (!fs.existsSync(TRANSACTIONS_FILE)) {
+    writeJsonFile(TRANSACTIONS_FILE, loadedTransactions);
+  }
+  if (!fs.existsSync(ADJUSTING_ENTRIES_FILE)) {
+    writeJsonFile(ADJUSTING_ENTRIES_FILE, loadedAdjustingEntries);
+  }
+  if (!fs.existsSync(STATE_FILE)) {
+    writeJsonFile(STATE_FILE, state);
+  }
+
+  return {
+    transactions: loadedTransactions,
+    adjustingEntries: loadedAdjustingEntries,
+    nextTransactionId: state.nextTransactionId || 8,
+    nextAdjustingEntryId: state.nextAdjustingEntryId || 6
+  };
+};
+
 // Chart of Accounts
 const getChartOfAccounts = () => {
   return {
@@ -32,76 +214,10 @@ const getChartOfAccounts = () => {
   };
 };
 
-// In-memory storage for transactions
-let transactions = [
-  {
-    id: 1,
-    date: '2024-01-01',
-    description: 'Setoran modal awal oleh Bapak Amin dan Fawzi',
-    entries: [
-      { account: '1-110', debit: 100000000, credit: 0 },
-      { account: '3-101', debit: 0, credit: 60000000 },
-      { account: '3-102', debit: 0, credit: 40000000 }
-    ]
-  },
-  {
-    id: 2,
-    date: '2024-01-01',
-    description: 'Membayar sewa kantor untuk 1 tahun',
-    entries: [
-      { account: '1-150', debit: 24000000, credit: 0 },
-      { account: '1-110', debit: 0, credit: 24000000 }
-    ]
-  },
-  {
-    id: 3,
-    date: '2024-01-01',
-    description: 'Membeli mobil senilai Rp200 juta',
-    entries: [
-      { account: '1-230', debit: 200000000, credit: 0 },
-      { account: '1-110', debit: 0, credit: 40000000 },
-      { account: '2-210', debit: 0, credit: 160000000 }
-    ]
-  },
-  {
-    id: 4,
-    date: '2024-01-02',
-    description: 'Membeli perlengkapan kantor',
-    entries: [
-      { account: '1-140', debit: 10000000, credit: 0 },
-      { account: '1-110', debit: 0, credit: 10000000 }
-    ]
-  },
-  {
-    id: 5,
-    date: '2024-01-02',
-    description: 'Mengambil uang untuk kas kecil',
-    entries: [
-      { account: '1-100', debit: 1000000, credit: 0 },
-      { account: '1-110', debit: 0, credit: 1000000 }
-    ]
-  },
-  {
-    id: 6,
-    date: '2024-01-04',
-    description: 'Menerima pembayaran awal jasa konsultasi dari PT HIJ',
-    entries: [
-      { account: '1-110', debit: 10000000, credit: 0 },
-      { account: '4-100', debit: 0, credit: 10000000 }
-    ]
-  },
-  {
-    id: 7,
-    date: '2024-01-31',
-    description: 'Menerima pembayaran akhir jasa konsultasi dari PT HIJ',
-    entries: [
-      { account: '1-110', debit: 20000000, credit: 0 },
-      { account: '4-100', debit: 0, credit: 20000000 }
-    ]
-  }
-];
-
-let nextTransactionId = 8;
+// Load data from files
+const dataStore = loadData();
+let transactions = dataStore.transactions;
+let nextTransactionId = dataStore.nextTransactionId;
 
 // CRUD Operations for Transactions
 const addTransaction = (transaction) => {
@@ -126,6 +242,11 @@ const addTransaction = (transaction) => {
   };
   
   transactions.push(newTransaction);
+  
+  // Save to file
+  writeJsonFile(TRANSACTIONS_FILE, transactions);
+  writeJsonFile(STATE_FILE, { nextTransactionId, nextAdjustingEntryId });
+  
   return newTransaction;
 };
 
@@ -155,6 +276,9 @@ const updateTransaction = (id, transaction) => {
     entries: transaction.entries
   };
   
+  // Save to file
+  writeJsonFile(TRANSACTIONS_FILE, transactions);
+  
   return transactions[index];
 };
 
@@ -165,6 +289,10 @@ const deleteTransaction = (id) => {
   }
   
   transactions.splice(index, 1);
+  
+  // Save to file
+  writeJsonFile(TRANSACTIONS_FILE, transactions);
+  
   return true;
 };
 
@@ -174,55 +302,8 @@ const getTransactions = () => {
 };
 
 // Adjusting Entries (S4 - Jurnal Penyesuaian)
-let adjustingEntries = [
-  {
-    id: 1,
-    date: '2024-01-31',
-    description: 'Gaji pegawai belum dicatat',
-    entries: [
-      { account: '5-100', debit: 10000000, credit: 0 },
-      { account: '2-110', debit: 0, credit: 10000000 }
-    ]
-  },
-  {
-    id: 2,
-    date: '2024-01-31',
-    description: 'Tagihan listrik, air dan internet belum dicatat',
-    entries: [
-      { account: '5-120', debit: 5000000, credit: 0 },
-      { account: '2-120', debit: 0, credit: 5000000 }
-    ]
-  },
-  {
-    id: 3,
-    date: '2024-01-31',
-    description: 'Beban depresiasi kendaraan',
-    entries: [
-      { account: '5-130', debit: 1600000, credit: 0 },
-      { account: '1-240', debit: 0, credit: 1600000 }
-    ]
-  },
-  {
-    id: 4,
-    date: '2024-01-31',
-    description: 'Pemakaian perlengkapan kantor (10jt - 8jt = 2jt)',
-    entries: [
-      { account: '5-120', debit: 2000000, credit: 0 },
-      { account: '1-140', debit: 0, credit: 2000000 }
-    ]
-  },
-  {
-    id: 5,
-    date: '2024-01-31',
-    description: 'Beban sewa kantor untuk bulan Januari (24jt / 12)',
-    entries: [
-      { account: '5-110', debit: 2000000, credit: 0 },
-      { account: '1-150', debit: 0, credit: 2000000 }
-    ]
-  }
-];
-
-let nextAdjustingEntryId = 6;
+let adjustingEntries = dataStore.adjustingEntries;
+let nextAdjustingEntryId = dataStore.nextAdjustingEntryId;
 
 // CRUD Operations for Adjusting Entries
 const addAdjustingEntry = (entry) => {
@@ -247,6 +328,11 @@ const addAdjustingEntry = (entry) => {
   };
   
   adjustingEntries.push(newEntry);
+  
+  // Save to file
+  writeJsonFile(ADJUSTING_ENTRIES_FILE, adjustingEntries);
+  writeJsonFile(STATE_FILE, { nextTransactionId, nextAdjustingEntryId });
+  
   return newEntry;
 };
 
@@ -276,6 +362,9 @@ const updateAdjustingEntry = (id, entry) => {
     entries: entry.entries
   };
   
+  // Save to file
+  writeJsonFile(ADJUSTING_ENTRIES_FILE, adjustingEntries);
+  
   return adjustingEntries[index];
 };
 
@@ -286,6 +375,10 @@ const deleteAdjustingEntry = (id) => {
   }
   
   adjustingEntries.splice(index, 1);
+  
+  // Save to file
+  writeJsonFile(ADJUSTING_ENTRIES_FILE, adjustingEntries);
+  
   return true;
 };
 

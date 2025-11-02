@@ -34,3 +34,7 @@ Thumbs.db
 build/
 *.zip
 *.tar.gz
+
+# Data files (persistent storage)
+data/
+/tmp/data/

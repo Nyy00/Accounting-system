@@ -14,18 +14,27 @@ if (process.env.DATABASE_URL && process.env.DATABASE_URL.includes('neon.tech')) 
     const dbUrl = process.env.DATABASE_URL;
     console.log('🔗 Connecting to Neon database...');
     
-    // Extract branch name from connection string
-    const branchMatch = dbUrl.match(/@([^.]+)\.([^/]+)\.neon\.tech/);
-    const branchName = branchMatch ? branchMatch[1] : 'unknown';
-    const region = branchMatch ? branchMatch[2] : 'unknown';
+    // Extract branch/endpoint info from connection string
+    // Format: postgresql://user:pass@ep-xxx-xxx-pooler.region.aws.neon.tech/dbname
+    // or: postgresql://user:pass@ep-xxx-xxx.region.aws.neon.tech/dbname
+    const endpointMatch = dbUrl.match(/@(ep-[^/]+)\.([^.]+\.aws)\.neon\.tech/);
+    const endpoint = endpointMatch ? endpointMatch[1] : 'unknown';
+    const region = endpointMatch ? endpointMatch[2] : 'unknown';
+    const isPooler = endpoint.includes('-pooler');
+    
+    // Extract database name
+    const dbMatch = dbUrl.match(/\/neondb[^?]*/);
+    const dbName = dbMatch ? dbMatch[0].replace('/', '') : 'unknown';
     
     console.log(`📋 DATABASE_URL preview: ${dbUrl.substring(0, 30)}...${dbUrl.substring(dbUrl.length - 30)}`);
-    console.log(`🌿 Branch: ${branchName}`);
+    console.log(`🔌 Endpoint: ${endpoint}`);
     console.log(`🌍 Region: ${region}`);
+    console.log(`💾 Database: ${dbName}`);
+    console.log(`🔗 Connection Type: ${isPooler ? 'Pooled' : 'Direct'}`);
     
-    // Check if branch matches
-    if (branchName !== 'main' && branchName !== 'dev') {
-      console.warn(`⚠️  Warning: Using branch '${branchName}' - make sure this matches your Neon console view!`);
+    // Warning about pooled connection
+    if (isPooler) {
+      console.log(`ℹ️  Using pooled connection. Make sure this endpoint corresponds to the branch you're viewing in Neon console.`);
     }
     
     const sql = neon(dbUrl);

@@ -24,18 +24,34 @@ Di Neon, setiap branch memiliki database yang **terpisah**. Jadi data di branch 
 3. Lihat data di branch `dev`
 4. **Pastikan** connection string di Vercel menggunakan branch `dev`
 
-### Cara Cek Branch yang Digunakan
+### Cara Cek Endpoint yang Digunakan
 
 Setelah deploy, cek Vercel logs. Anda akan melihat:
 ```
-🌿 Branch: main
-```
-atau
-```
-🌿 Branch: dev
+🔌 Endpoint: ep-holy-sunset-a1rvukkx-pooler
+💾 Database: neondb
+🔗 Connection Type: Pooled
 ```
 
-Ini akan menunjukkan branch mana yang digunakan oleh aplikasi.
+**Penting:**
+- Jika menggunakan **Pooled connection**, endpoint mungkin tidak menunjukkan branch name dengan jelas
+- Untuk melihat branch yang benar, Anda perlu:
+  1. Buka Neon Dashboard
+  2. Pilih **Project** → **Connection Details**
+  3. Lihat **Connection strings** untuk setiap branch (main, dev, dll)
+  4. Pastikan connection string di Vercel sesuai dengan branch yang Anda lihat di console
+
+## Troubleshooting: Database Kosong
+
+Jika log menunjukkan:
+```
+[getChartOfAccounts] Found 0 accounts in database
+```
+
+Tetapi Anda mendapat error "Account already exists":
+- Kemungkinan data ada di **branch/database lain**
+- Atau connection string salah/database berbeda
+- Solusi: Pastikan menggunakan connection string yang sama dengan branch yang Anda lihat di Neon console
 
 ## Cara Verifikasi
 

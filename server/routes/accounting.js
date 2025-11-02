@@ -10,7 +10,10 @@ const {
   deleteTransaction,
   deleteAdjustingEntry,
   updateTransaction,
-  updateAdjustingEntry
+  updateAdjustingEntry,
+  addAccount,
+  updateAccount,
+  deleteAccount
 } = require('../services/accountingService');
 
 // Get chart of accounts
@@ -20,6 +23,38 @@ router.get('/chart-of-accounts', (req, res) => {
     res.json(accounts);
   } catch (error) {
     res.status(500).json({ error: error.message });
+  }
+});
+
+// Add new account
+router.post('/accounts', (req, res) => {
+  try {
+    const account = addAccount(req.body);
+    res.json(account);
+  } catch (error) {
+    res.status(400).json({ error: error.message });
+  }
+});
+
+// Update account
+router.put('/accounts/:code', (req, res) => {
+  try {
+    const code = decodeURIComponent(req.params.code);
+    const account = updateAccount(code, req.body);
+    res.json(account);
+  } catch (error) {
+    res.status(400).json({ error: error.message });
+  }
+});
+
+// Delete account
+router.delete('/accounts/:code', (req, res) => {
+  try {
+    const code = decodeURIComponent(req.params.code);
+    deleteAccount(code);
+    res.json({ success: true });
+  } catch (error) {
+    res.status(400).json({ error: error.message });
   }
 });
 

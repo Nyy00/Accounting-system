@@ -48,15 +48,23 @@ if (process.env.DATABASE_URL && process.env.DATABASE_URL.includes('neon.tech')) 
         return {
           run: async (...params) => {
             try {
-              // For INSERT queries, we need to append RETURNING id
+              // For INSERT queries, we need to append RETURNING id ONLY for tables with id column
               let modifiedQuery = convertedQuery;
               if (convertedQuery.toUpperCase().includes('INSERT') && 
                   !convertedQuery.toUpperCase().includes('RETURNING')) {
-                // Extract table name and add RETURNING id
+                // Extract table name
                 const insertMatch = convertedQuery.match(/INSERT INTO\s+(\w+)/i);
                 if (insertMatch) {
-                  modifiedQuery = convertedQuery + ' RETURNING id';
-                  console.log(`[Neon] Modified INSERT query to include RETURNING id`);
+                  const tableName = insertMatch[1];
+                  // Only add RETURNING id for tables that have id column (not chart_of_accounts)
+                  // Tables with id: transactions, adjusting_entries, transaction_entries, adjusting_entry_entries, metadata
+                  // Tables WITHOUT id: chart_of_accounts (uses code as primary key)
+                  if (tableName !== 'chart_of_accounts') {
+                    modifiedQuery = convertedQuery + ' RETURNING id';
+                    console.log(`[Neon] Modified INSERT query to include RETURNING id for table: ${tableName}`);
+                  } else {
+                    console.log(`[Neon] Skipping RETURNING id for table: ${tableName} (uses code as primary key)`);
+                  }
                 }
               }
               

@@ -62,13 +62,13 @@ if (process.env.DATABASE_URL && process.env.DATABASE_URL.includes('neon.tech')) 
     dbType = 'neon';
     console.log('✅ Using Neon Serverless Postgres');
     
-    // Initialize schema immediately
+    // Initialize schema in background (don't block, ignore errors - might be concurrent)
     (async () => {
       try {
         await require('./postgres-adapter').initializeSchema();
-        console.log('✅ Neon schema initialized successfully');
       } catch (err) {
-        console.error('❌ Schema init error:', err);
+        // Silently ignore - schema might already be initialized or being initialized by another request
+        // Error messages are already handled inside initializeSchema
       }
     })();
   } catch (error) {

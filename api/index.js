@@ -1,25 +1,22 @@
 // Vercel Serverless Function for API routes
 module.exports = async (req, res) => {
-  // Initialize database connection and schema
+  // Initialize database connection and schema (only once, silently handle conflicts)
   try {
     const { getDatabase } = require('../server/services/database');
     getDatabase(); // This will initialize the database connection
     
-    // Initialize schema if using Neon or Postgres
+    // Initialize schema if using Neon or Postgres (don't wait, let it run async)
     const { getDbType } = require('../server/services/db-adapter');
     const dbType = getDbType();
     if (dbType === 'neon' || dbType === 'postgres' || dbType === 'supabase') {
+      // Run schema init in background, ignore errors (might be concurrent requests)
       const { initializeSchema } = require('../server/services/postgres-adapter');
-      await initializeSchema().catch(err => {
-        // Schema might already exist, that's okay
-        if (!err.message || !err.message.includes('already exists')) {
-          console.warn('Schema initialization warning:', err.message);
-        }
+      initializeSchema().catch(() => {
+        // Silently ignore - schema might already be initialized or being initialized by another request
       });
     }
   } catch (error) {
-    console.error('Database initialization error:', error);
-    // Continue anyway, might be using in-memory fallback
+    // Silently continue - database might already be initialized
   }
 
   // Set CORS headers

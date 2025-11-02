@@ -116,14 +116,19 @@ const initializeSchema = async () => {
       console.log('✅ Neon schema initialized successfully');
       return;
     } catch (error) {
-      // Log all errors, but don't fail if table already exists
-      if (error.message && error.message.includes('already exists')) {
-        console.log('✅ Neon schema already exists');
+      // Ignore errors for existing schema or concurrent initialization
+      const errorMsg = error.message || error.toString() || '';
+      if (errorMsg.includes('already exists') || 
+          errorMsg.includes('duplicate key value') ||
+          errorMsg.includes('pg_type_typname_nsp_index')) {
+        // Schema or types already exist or being created by another request
+        // This is normal in concurrent serverless environments
+        return; // Silently return - schema is fine
       } else {
-        console.error('❌ Error creating Neon schema:', error.message || error);
-        // Re-throw to let caller know schema init failed
-        throw error;
+        // Only log unexpected errors (don't throw to avoid blocking)
+        console.error('❌ Error creating Neon schema:', errorMsg);
       }
+      // Don't throw - let it continue (schema might already be initialized)
       return;
     }
   }

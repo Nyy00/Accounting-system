@@ -1,6 +1,6 @@
 import React, { useMemo } from 'react';
 import '../../App.css';
-import { getAccountName } from '../../utils/formatters';
+import { getAccountName, getAccountType } from '../../utils/formatters';
 
 const formatCurrency = (amount) => {
   return new Intl.NumberFormat('id-ID', {
@@ -61,16 +61,28 @@ const GeneralLedger = ({ transactions, adjustingEntries, onNextStage, metadata }
       let totalDebit = 0;
       let totalCredit = 0;
       
+      // Get account type from chart of accounts (using cache)
+      const accountType = getAccountType(code);
+      
       acc.entries.forEach(entry => {
         totalDebit += entry.debit;
         totalCredit += entry.credit;
         
-        // Determine account type for balance calculation
-        const accountType = code.split('-')[0];
-        if (['1', '5'].includes(accountType)) {
+        // Calculate balance based on account type (following accounting standards)
+        // Assets & Expenses: Debit increases, Credit decreases (Normal balance = Debit)
+        // Liabilities, Equity & Revenue: Credit increases, Debit decreases (Normal balance = Credit)
+        if (accountType === 'asset' || accountType === 'expense') {
           balance = totalDebit - totalCredit;
-        } else {
+        } else if (accountType === 'liability' || accountType === 'equity' || accountType === 'revenue') {
           balance = totalCredit - totalDebit;
+        } else {
+          // Fallback: try to determine from code prefix if type is unknown
+          const codePrefix = code.split('-')[0];
+          if (['1', '5'].includes(codePrefix)) {
+            balance = totalDebit - totalCredit;
+          } else {
+            balance = totalCredit - totalDebit;
+          }
         }
         
         entry.runningBalance = balance;

@@ -122,11 +122,11 @@ const ChartOfAccounts = ({ onRefresh }) => {
           type: formData.type,
           isContra: formData.isContra
         });
-        updateAccountCache(formData.code, formData.name);
+        updateAccountCache(formData.code, formData.name, formData.type, formData.isContra);
       } else {
         // Add new
         response = await axios.post(`${API_URL}/api/accounting/accounts`, formData);
-        updateAccountCache(formData.code, formData.name);
+        updateAccountCache(formData.code, formData.name, formData.type, formData.isContra);
       }
       
       // Update state directly from response if available, otherwise fetch

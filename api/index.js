@@ -25,7 +25,10 @@ module.exports = async (req, res) => {
     updateAdjustingEntry,
     deleteAdjustingEntry,
     getMetadata,
-    updateMetadata
+    updateMetadata,
+    addAccount,
+    updateAccount,
+    deleteAccount
   } = require('../server/services/accountingService');
   
   // Extract path from request
@@ -64,6 +67,10 @@ module.exports = async (req, res) => {
         data = addAdjustingEntry(req.body);
         res.status(201).json(data);
         return;
+      } else if (path === '/accounting/accounts') {
+        data = addAccount(req.body);
+        res.status(201).json(data);
+        return;
       } else {
         res.status(404).json({ error: 'Not found' });
         return;
@@ -74,6 +81,15 @@ module.exports = async (req, res) => {
     if (req.method === 'PUT') {
       if (path === '/accounting/metadata') {
         data = updateMetadata(req.body);
+        res.status(200).json(data);
+        return;
+      }
+      
+      // Update account (code is in path)
+      const accountMatch = path.match(/\/accounting\/accounts\/(.+)/);
+      if (accountMatch) {
+        const code = decodeURIComponent(accountMatch[1]);
+        data = updateAccount(code, req.body);
         res.status(200).json(data);
         return;
       }
@@ -97,6 +113,15 @@ module.exports = async (req, res) => {
     
     // DELETE endpoints
     if (req.method === 'DELETE') {
+      // Delete account (code is in path)
+      const accountMatch = path.match(/\/accounting\/accounts\/(.+)/);
+      if (accountMatch) {
+        const code = decodeURIComponent(accountMatch[1]);
+        deleteAccount(code);
+        res.status(200).json({ success: true });
+        return;
+      }
+      
       const match = path.match(/\/accounting\/(transactions|adjusting-entries)\/(\d+)/);
       if (match) {
         const type = match[1];

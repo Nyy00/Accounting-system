@@ -11,9 +11,11 @@ import AdjustedTrialBalance from './components/reports/AdjustedTrialBalance';
 import IncomeStatement from './components/reports/IncomeStatement';
 import FinancialPosition from './components/reports/FinancialPosition';
 import ChangesInEquity from './components/reports/ChangesInEquity';
+import ChartOfAccounts from './components/ChartOfAccounts';
+import { initializeAccountCache } from './utils/formatters';
 
 function App() {
-  const [activeReport, setActiveReport] = useState('s1');
+  const [activeReport, setActiveReport] = useState('s0');
   const [transactions, setTransactions] = useState([]);
   const [adjustingEntries, setAdjustingEntries] = useState([]);
   const [reports, setReports] = useState(null);
@@ -26,15 +28,18 @@ function App() {
 
   const fetchData = async () => {
     try {
-      const [transRes, adjRes, reportsRes] = await Promise.all([
+      const [transRes, adjRes, reportsRes, coaRes] = await Promise.all([
         axios.get(`${API_URL}/api/accounting/transactions`),
         axios.get(`${API_URL}/api/accounting/adjusting-entries`),
-        axios.get(`${API_URL}/api/accounting/reports`)
+        axios.get(`${API_URL}/api/accounting/reports`),
+        axios.get(`${API_URL}/api/accounting/chart-of-accounts`)
       ]);
       
       setTransactions(transRes.data);
       setAdjustingEntries(adjRes.data);
       setReports(reportsRes.data);
+      // Initialize account name cache
+      initializeAccountCache(coaRes.data);
       setLoading(false);
     } catch (error) {
       console.error('Error fetching data:', error);
@@ -60,6 +65,8 @@ function App() {
     }
 
     switch (activeReport) {
+      case 's0':
+        return <ChartOfAccounts onRefresh={fetchData} />;
       case 's1':
         return <GeneralJournal transactions={transactions} onRefresh={fetchData} onNextStage={() => handleNextStage('s1')} metadata={metadata} />;
       case 's2':
@@ -75,7 +82,7 @@ function App() {
       case 's7':
         return <ChangesInEquity reports={reports} metadata={metadata} />;
       default:
-        return <GeneralJournal transactions={transactions} onRefresh={fetchData} onNextStage={() => handleNextStage('s1')} metadata={metadata} />;
+        return <ChartOfAccounts onRefresh={fetchData} />;
     }
   };
 

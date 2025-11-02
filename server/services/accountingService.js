@@ -11,6 +11,7 @@ const TRANSACTIONS_FILE = path.join(DATA_DIR, 'transactions.json');
 const ADJUSTING_ENTRIES_FILE = path.join(DATA_DIR, 'adjusting-entries.json');
 const STATE_FILE = path.join(DATA_DIR, 'state.json');
 const METADATA_FILE = path.join(DATA_DIR, 'metadata.json');
+const COA_FILE = path.join(DATA_DIR, 'chart-of-accounts.json');
 
 // Ensure data directory exists
 if (!fs.existsSync(DATA_DIR)) {
@@ -42,177 +43,195 @@ const writeJsonFile = (filePath, data) => {
 
 // Load data from files on startup
 const loadData = () => {
-  const defaultTransactions = [
-    {
-      id: 1,
-      date: '2024-01-01',
-      description: 'Setoran modal awal oleh Bapak Amin dan Fawzi',
-      entries: [
-        { account: '1-110', debit: 100000000, credit: 0 },
-        { account: '3-101', debit: 0, credit: 60000000 },
-        { account: '3-102', debit: 0, credit: 40000000 }
-      ]
-    },
-    {
-      id: 2,
-      date: '2024-01-01',
-      description: 'Membayar sewa kantor untuk 1 tahun',
-      entries: [
-        { account: '1-150', debit: 24000000, credit: 0 },
-        { account: '1-110', debit: 0, credit: 24000000 }
-      ]
-    },
-    {
-      id: 3,
-      date: '2024-01-01',
-      description: 'Membeli mobil senilai Rp200 juta',
-      entries: [
-        { account: '1-230', debit: 200000000, credit: 0 },
-        { account: '1-110', debit: 0, credit: 40000000 },
-        { account: '2-210', debit: 0, credit: 160000000 }
-      ]
-    },
-    {
-      id: 4,
-      date: '2024-01-02',
-      description: 'Membeli perlengkapan kantor',
-      entries: [
-        { account: '1-140', debit: 10000000, credit: 0 },
-        { account: '1-110', debit: 0, credit: 10000000 }
-      ]
-    },
-    {
-      id: 5,
-      date: '2024-01-02',
-      description: 'Mengambil uang untuk kas kecil',
-      entries: [
-        { account: '1-100', debit: 1000000, credit: 0 },
-        { account: '1-110', debit: 0, credit: 1000000 }
-      ]
-    },
-    {
-      id: 6,
-      date: '2024-01-04',
-      description: 'Menerima pembayaran awal jasa konsultasi dari PT HIJ',
-      entries: [
-        { account: '1-110', debit: 10000000, credit: 0 },
-        { account: '4-100', debit: 0, credit: 10000000 }
-      ]
-    },
-    {
-      id: 7,
-      date: '2024-01-31',
-      description: 'Menerima pembayaran akhir jasa konsultasi dari PT HIJ',
-      entries: [
-        { account: '1-110', debit: 20000000, credit: 0 },
-        { account: '4-100', debit: 0, credit: 20000000 }
-      ]
-    }
-  ];
+  // Start with empty arrays - no default data
+  const defaultTransactions = [];
+  const defaultAdjustingEntries = [];
 
-  const defaultAdjustingEntries = [
-    {
-      id: 1,
-      date: '2024-01-31',
-      description: 'Gaji pegawai belum dicatat',
-      entries: [
-        { account: '5-100', debit: 10000000, credit: 0 },
-        { account: '2-110', debit: 0, credit: 10000000 }
-      ]
-    },
-    {
-      id: 2,
-      date: '2024-01-31',
-      description: 'Tagihan listrik, air dan internet belum dicatat',
-      entries: [
-        { account: '5-120', debit: 5000000, credit: 0 },
-        { account: '2-120', debit: 0, credit: 5000000 }
-      ]
-    },
-    {
-      id: 3,
-      date: '2024-01-31',
-      description: 'Beban depresiasi kendaraan',
-      entries: [
-        { account: '5-130', debit: 1600000, credit: 0 },
-        { account: '1-240', debit: 0, credit: 1600000 }
-      ]
-    },
-    {
-      id: 4,
-      date: '2024-01-31',
-      description: 'Pemakaian perlengkapan kantor (10jt - 8jt = 2jt)',
-      entries: [
-        { account: '5-120', debit: 2000000, credit: 0 },
-        { account: '1-140', debit: 0, credit: 2000000 }
-      ]
-    },
-    {
-      id: 5,
-      date: '2024-01-31',
-      description: 'Beban sewa kantor untuk bulan Januari (24jt / 12)',
-      entries: [
-        { account: '5-110', debit: 2000000, credit: 0 },
-        { account: '1-150', debit: 0, credit: 2000000 }
-      ]
-    }
-  ];
+  // Check if files exist first to avoid overwriting with defaults
+  const transactionsExist = fs.existsSync(TRANSACTIONS_FILE);
+  const adjustingEntriesExist = fs.existsSync(ADJUSTING_ENTRIES_FILE);
+  const stateExists = fs.existsSync(STATE_FILE);
 
-  const loadedTransactions = readJsonFile(TRANSACTIONS_FILE, defaultTransactions);
-  const loadedAdjustingEntries = readJsonFile(ADJUSTING_ENTRIES_FILE, defaultAdjustingEntries);
-  const state = readJsonFile(STATE_FILE, { nextTransactionId: 8, nextAdjustingEntryId: 6 });
+  // Only use defaults if file doesn't exist
+  const loadedTransactions = transactionsExist 
+    ? readJsonFile(TRANSACTIONS_FILE, [])  // If exists but empty, return empty array
+    : defaultTransactions;
+  const loadedAdjustingEntries = adjustingEntriesExist
+    ? readJsonFile(ADJUSTING_ENTRIES_FILE, [])  // If exists but empty, return empty array
+    : defaultAdjustingEntries;
+  const state = stateExists
+    ? readJsonFile(STATE_FILE, { nextTransactionId: 1, nextAdjustingEntryId: 1 })
+    : { nextTransactionId: 1, nextAdjustingEntryId: 1 };
 
-  // Initialize files if they don't exist
-  if (!fs.existsSync(TRANSACTIONS_FILE)) {
+  // Initialize files if they don't exist (only on first run)
+  if (!transactionsExist) {
     writeJsonFile(TRANSACTIONS_FILE, loadedTransactions);
   }
-  if (!fs.existsSync(ADJUSTING_ENTRIES_FILE)) {
+  if (!adjustingEntriesExist) {
     writeJsonFile(ADJUSTING_ENTRIES_FILE, loadedAdjustingEntries);
   }
-  if (!fs.existsSync(STATE_FILE)) {
+  if (!stateExists) {
     writeJsonFile(STATE_FILE, state);
   }
 
   return {
     transactions: loadedTransactions,
     adjustingEntries: loadedAdjustingEntries,
-    nextTransactionId: state.nextTransactionId || 8,
-    nextAdjustingEntryId: state.nextAdjustingEntryId || 6
+    nextTransactionId: state.nextTransactionId || 1,
+    nextAdjustingEntryId: state.nextAdjustingEntryId || 1
   };
 };
 
-// Chart of Accounts
+// Chart of Accounts - Now stored in file
 const getChartOfAccounts = () => {
-  return {
-    assets: [
-      { code: '1-100', name: 'Kas kecil', type: 'asset' },
-      { code: '1-110', name: 'Bank', type: 'asset' },
-      { code: '1-140', name: 'Perlengkapan Kantor', type: 'asset' },
-      { code: '1-150', name: 'Sewa dibayar dimuka', type: 'asset' },
-      { code: '1-230', name: 'Kendaraan', type: 'asset' },
-      { code: '1-240', name: 'Akumulasi Penyusutan Kendaraan', type: 'asset', isContra: true }
-    ],
-    liabilities: [
-      { code: '2-110', name: 'Utang Gaji', type: 'liability' },
-      { code: '2-120', name: 'Utang lain-lain', type: 'liability' },
-      { code: '2-130', name: 'Pendapatan Diterima di Muka', type: 'liability' },
-      { code: '2-210', name: 'Utang Bank', type: 'liability' }
-    ],
-    equity: [
-      { code: '3-101', name: 'Modal Amin', type: 'equity' },
-      { code: '3-102', name: 'Modal Fawzi', type: 'equity' },
-      { code: '3-200', name: 'Laba ditahan', type: 'equity' }
-    ],
-    revenue: [
-      { code: '4-100', name: 'Pendapatan', type: 'revenue' }
-    ],
-    expenses: [
-      { code: '5-100', name: 'Beban Gaji', type: 'expense' },
-      { code: '5-110', name: 'Beban Sewa Kantor', type: 'expense' },
-      { code: '5-120', name: 'Beban Listrik, Air, Internet dan lain-lain', type: 'expense' },
-      { code: '5-130', name: 'Beban penyusutan kendaraan', type: 'expense' }
-    ]
+  const defaultCOA = {
+    assets: [],
+    liabilities: [],
+    equity: [],
+    revenue: [],
+    expenses: []
   };
+  
+  const coaExists = fs.existsSync(COA_FILE);
+  const chartOfAccounts = coaExists
+    ? readJsonFile(COA_FILE, defaultCOA)
+    : defaultCOA;
+  
+  // Initialize file if it doesn't exist
+  if (!coaExists) {
+    writeJsonFile(COA_FILE, chartOfAccounts);
+  }
+  
+  return chartOfAccounts;
+};
+
+// CRUD Operations for Chart of Accounts
+const addAccount = (account) => {
+  const chartOfAccounts = getChartOfAccounts();
+  const { code, name, type, isContra } = account;
+  
+  if (!code || !name || !type) {
+    throw new Error('Account must have code, name, and type');
+  }
+  
+  // Check if code already exists
+  const allAccounts = [
+    ...chartOfAccounts.assets,
+    ...chartOfAccounts.liabilities,
+    ...chartOfAccounts.equity,
+    ...chartOfAccounts.revenue,
+    ...chartOfAccounts.expenses
+  ];
+  
+  if (allAccounts.find(acc => acc.code === code)) {
+    throw new Error(`Account code ${code} already exists`);
+  }
+  
+  const newAccount = {
+    code,
+    name,
+    type,
+    isContra: isContra || false
+  };
+  
+  // Add to appropriate category
+  const categoryMap = {
+    'asset': 'assets',
+    'liability': 'liabilities',
+    'equity': 'equity',
+    'revenue': 'revenue',
+    'expense': 'expenses'
+  };
+  
+  const category = categoryMap[type] || 'assets';
+  chartOfAccounts[category].push(newAccount);
+  
+  // Save to file
+  writeJsonFile(COA_FILE, chartOfAccounts);
+  
+  return newAccount;
+};
+
+const updateAccount = (code, account) => {
+  const chartOfAccounts = getChartOfAccounts();
+  const { name, type, isContra } = account;
+  
+  if (!name || !type) {
+    throw new Error('Account must have name and type');
+  }
+  
+  // Find account in all categories
+  let found = false;
+  const categories = ['assets', 'liabilities', 'equity', 'revenue', 'expenses'];
+  
+  const categoryMap = {
+    'asset': 'assets',
+    'liability': 'liabilities',
+    'equity': 'equity',
+    'revenue': 'revenue',
+    'expense': 'expenses'
+  };
+  
+  const targetCategory = categoryMap[type] || 'assets';
+  
+  for (const category of categories) {
+    const index = chartOfAccounts[category].findIndex(acc => acc.code === code);
+    if (index !== -1) {
+      // If type changed, move to new category
+      if (targetCategory !== category) {
+        chartOfAccounts[category].splice(index, 1);
+        chartOfAccounts[targetCategory].push({
+          code,
+          name,
+          type,
+          isContra: isContra || false
+        });
+      } else {
+        chartOfAccounts[category][index] = {
+          code,
+          name,
+          type,
+          isContra: isContra || false
+        };
+      }
+      found = true;
+      break;
+    }
+  }
+  
+  if (!found) {
+    throw new Error('Account not found');
+  }
+  
+  // Save to file
+  writeJsonFile(COA_FILE, chartOfAccounts);
+  
+  return { code, name, type, isContra: isContra || false };
+};
+
+const deleteAccount = (code) => {
+  const chartOfAccounts = getChartOfAccounts();
+  
+  const categories = ['assets', 'liabilities', 'equity', 'revenue', 'expenses'];
+  let found = false;
+  
+  for (const category of categories) {
+    const index = chartOfAccounts[category].findIndex(acc => acc.code === code);
+    if (index !== -1) {
+      chartOfAccounts[category].splice(index, 1);
+      found = true;
+      break;
+    }
+  }
+  
+  if (!found) {
+    throw new Error('Account not found');
+  }
+  
+  // Save to file
+  writeJsonFile(COA_FILE, chartOfAccounts);
+  
+  return true;
 };
 
 // Load data from files
@@ -220,8 +239,48 @@ const dataStore = loadData();
 let transactions = dataStore.transactions;
 let nextTransactionId = dataStore.nextTransactionId;
 
+// Helper function to reload data from file
+const reloadTransactions = () => {
+  // Always read from file, use empty array as default if file doesn't exist
+  const fileData = readJsonFile(TRANSACTIONS_FILE, null);
+  
+  // If file exists, use its data (even if empty array)
+  if (fileData !== null) {
+    transactions = fileData;
+    // Update nextTransactionId based on max ID in transactions
+    if (transactions.length > 0) {
+      const maxId = Math.max(...transactions.map(t => t.id || 0));
+      nextTransactionId = maxId + 1;
+    }
+  }
+  // If fileData is null (file doesn't exist), keep current transactions
+  
+  return transactions;
+};
+
+// Helper function to reload adjusting entries from file
+const reloadAdjustingEntries = () => {
+  // Always read from file, use null as default if file doesn't exist
+  const fileData = readJsonFile(ADJUSTING_ENTRIES_FILE, null);
+  
+  // If file exists, use its data (even if empty array)
+  if (fileData !== null) {
+    adjustingEntries = fileData;
+    // Update nextAdjustingEntryId based on max ID
+    if (adjustingEntries.length > 0) {
+      const maxId = Math.max(...adjustingEntries.map(e => e.id || 0));
+      nextAdjustingEntryId = maxId + 1;
+    }
+  }
+  // If fileData is null (file doesn't exist), keep current adjustingEntries
+  
+  return adjustingEntries;
+};
+
 // CRUD Operations for Transactions
 const addTransaction = (transaction) => {
+  // Reload from file to ensure we have latest data
+  reloadTransactions();
   // Validate transaction
   if (!transaction.date || !transaction.description || !transaction.entries || transaction.entries.length < 2) {
     throw new Error('Invalid transaction: must have date, description, and at least 2 entries');
@@ -252,6 +311,9 @@ const addTransaction = (transaction) => {
 };
 
 const updateTransaction = (id, transaction) => {
+  // Reload from file to ensure we have latest data
+  reloadTransactions();
+  
   // Validate transaction
   if (!transaction.date || !transaction.description || !transaction.entries || transaction.entries.length < 2) {
     throw new Error('Invalid transaction: must have date, description, and at least 2 entries');
@@ -284,6 +346,9 @@ const updateTransaction = (id, transaction) => {
 };
 
 const deleteTransaction = (id) => {
+  // Reload from file to ensure we have latest data
+  reloadTransactions();
+  
   const index = transactions.findIndex(t => t.id === id);
   if (index === -1) {
     throw new Error('Transaction not found');
@@ -292,14 +357,18 @@ const deleteTransaction = (id) => {
   transactions.splice(index, 1);
   
   // Save to file
-  writeJsonFile(TRANSACTIONS_FILE, transactions);
+  const saved = writeJsonFile(TRANSACTIONS_FILE, transactions);
+  if (!saved) {
+    throw new Error('Failed to save transaction deletion to file');
+  }
   
   return true;
 };
 
 // January 2024 Transactions (S1 - Jurnal Umum)
 const getTransactions = () => {
-  return transactions;
+  // Always reload from file to get latest data
+  return reloadTransactions();
 };
 
 // Adjusting Entries (S4 - Jurnal Penyesuaian)
@@ -308,6 +377,8 @@ let nextAdjustingEntryId = dataStore.nextAdjustingEntryId;
 
 // CRUD Operations for Adjusting Entries
 const addAdjustingEntry = (entry) => {
+  // Reload from file to ensure we have latest data
+  reloadAdjustingEntries();
   // Validate entry
   if (!entry.date || !entry.description || !entry.entries || entry.entries.length < 2) {
     throw new Error('Invalid adjusting entry: must have date, description, and at least 2 entries');
@@ -338,6 +409,9 @@ const addAdjustingEntry = (entry) => {
 };
 
 const updateAdjustingEntry = (id, entry) => {
+  // Reload from file to ensure we have latest data
+  reloadAdjustingEntries();
+  
   // Validate entry
   if (!entry.date || !entry.description || !entry.entries || entry.entries.length < 2) {
     throw new Error('Invalid adjusting entry: must have date, description, and at least 2 entries');
@@ -370,6 +444,9 @@ const updateAdjustingEntry = (id, entry) => {
 };
 
 const deleteAdjustingEntry = (id) => {
+  // Reload from file to ensure we have latest data
+  reloadAdjustingEntries();
+  
   const index = adjustingEntries.findIndex(e => e.id === id);
   if (index === -1) {
     throw new Error('Adjusting entry not found');
@@ -378,13 +455,17 @@ const deleteAdjustingEntry = (id) => {
   adjustingEntries.splice(index, 1);
   
   // Save to file
-  writeJsonFile(ADJUSTING_ENTRIES_FILE, adjustingEntries);
+  const saved = writeJsonFile(ADJUSTING_ENTRIES_FILE, adjustingEntries);
+  if (!saved) {
+    throw new Error('Failed to save adjusting entry deletion to file');
+  }
   
   return true;
 };
 
 const getAdjustingEntries = () => {
-  return adjustingEntries;
+  // Always reload from file to get latest data
+  return reloadAdjustingEntries();
 };
 
 // Calculate all account balances
@@ -618,6 +699,9 @@ module.exports = {
   updateAdjustingEntry,
   deleteAdjustingEntry,
   getMetadata,
-  updateMetadata
+  updateMetadata,
+  addAccount,
+  updateAccount,
+  deleteAccount
 };
 

@@ -4,6 +4,15 @@ const { getDbType } = require('./db-adapter');
 // Helper to get database connection
 const db = () => getDatabase();
 
+// Helper function to format currency (simple version)
+const formatCurrency = (amount) => {
+  return new Intl.NumberFormat('id-ID', {
+    style: 'currency',
+    currency: 'IDR',
+    minimumFractionDigits: 0
+  }).format(amount);
+};
+
 // Helper to check if database is async (Postgres/Neon)
 const isAsyncDb = () => {
   try {
@@ -662,6 +671,109 @@ const deleteAdjustingEntry = async (id) => {
   }
 };
 
+// Closing Entries - Close revenue and expense accounts to retained earnings
+const createClosingEntries = async (date, description) => {
+  const database = db();
+  const accounts = await getChartOfAccounts();
+  const balances = await calculateAccountBalances();
+  
+  // Get all revenue and expense accounts with non-zero balances
+  const revenueAccounts = (accounts.revenue || []).filter(acc => {
+    const balance = balances[acc.code] ? balances[acc.code].balance : 0;
+    return balance !== 0;
+  });
+  
+  const expenseAccounts = (accounts.expenses || []).filter(acc => {
+    const balance = balances[acc.code] ? balances[acc.code].balance : 0;
+    return balance !== 0;
+  });
+  
+  if (revenueAccounts.length === 0 && expenseAccounts.length === 0) {
+    throw new Error('Tidak ada akun revenue atau expense yang perlu ditutup');
+  }
+  
+  // Check if retained earnings account (3-200) exists
+  const retainedEarningsAccount = accounts.equity?.find(e => e.code === '3-200');
+  if (!retainedEarningsAccount) {
+    throw new Error('Akun Laba Ditahan (3-200) tidak ditemukan. Silakan tambahkan terlebih dahulu.');
+  }
+  
+  const closingEntries = [];
+  
+  try {
+    // Close revenue accounts (debit revenue, credit retained earnings)
+    let totalRevenueClosed = 0;
+    for (const revenueAcc of revenueAccounts) {
+      const balance = balances[revenueAcc.code] ? balances[revenueAcc.code].balance : 0;
+      if (balance > 0) {
+        // For revenue: debit the account to close it, credit retained earnings
+        closingEntries.push({
+          account: revenueAcc.code,
+          debit: balance,
+          credit: 0
+        });
+        closingEntries.push({
+          account: '3-200', // Retained Earnings
+          debit: 0,
+          credit: balance
+        });
+        totalRevenueClosed += balance;
+      }
+    }
+    
+    // Close expense accounts (credit expense, debit retained earnings)
+    let totalExpenseClosed = 0;
+    for (const expenseAcc of expenseAccounts) {
+      const balance = balances[expenseAcc.code] ? balances[expenseAcc.code].balance : 0;
+      if (balance > 0) {
+        // For expenses: credit the account to close it, debit retained earnings
+        closingEntries.push({
+          account: expenseAcc.code,
+          debit: 0,
+          credit: balance
+        });
+        closingEntries.push({
+          account: '3-200', // Retained Earnings
+          debit: balance,
+          credit: 0
+        });
+        totalExpenseClosed += balance;
+      }
+    }
+    
+    if (closingEntries.length === 0) {
+      throw new Error('Tidak ada akun yang perlu ditutup');
+    }
+    
+    // Validate double-entry (should be balanced)
+    const totalDebit = closingEntries.reduce((sum, e) => sum + (e.debit || 0), 0);
+    const totalCredit = closingEntries.reduce((sum, e) => sum + (e.credit || 0), 0);
+    
+    if (totalDebit !== totalCredit) {
+      throw new Error(`Unbalanced closing entries: Debit ${totalDebit} ≠ Credit ${totalCredit}`);
+    }
+    
+    // Create closing entry as adjusting entry
+    const closingDesc = description || `Penutupan Akun Sementara - Revenue: ${formatCurrency(totalRevenueClosed)}, Expense: ${formatCurrency(totalExpenseClosed)}`;
+    const entry = await addAdjustingEntry({
+      date: date || new Date().toISOString().split('T')[0],
+      description: closingDesc,
+      entries: closingEntries
+    });
+    
+    return {
+      entry,
+      revenueAccountsClosed: revenueAccounts.length,
+      expenseAccountsClosed: expenseAccounts.length,
+      totalRevenueClosed,
+      totalExpenseClosed,
+      netIncome: totalRevenueClosed - totalExpenseClosed
+    };
+  } catch (error) {
+    throw new Error(`Failed to create closing entries: ${error.message}`);
+  }
+};
+
 // Calculate all account balances
 const calculateAccountBalances = async () => {
   let accounts, transactions, adjustments;
@@ -821,31 +933,229 @@ const calculateReports = async () => {
   const netIncome = totalRevenue - totalExpenses;
   
   // S6 - Statement of Financial Position
-  const assets = (accounts.assets || []).map(acc => ({
+  // Separate contra accounts from regular accounts
+  const regularAssets = (accounts.assets || []).filter(acc => !acc.isContra);
+  const contraAssets = (accounts.assets || []).filter(acc => acc.isContra);
+  const regularLiabilities = (accounts.liabilities || []).filter(acc => !acc.isContra);
+  const contraLiabilities = (accounts.liabilities || []).filter(acc => acc.isContra);
+  
+  // Create mapping of contra accounts to their parent accounts
+  // Based on naming convention: contra accounts usually have similar codes to parent
+  // Example: 1-230 (Kendaraan) -> 1-240 (Akumulasi Penyusutan Kendaraan)
+  const contraToParent = {};
+  
+  contraAssets.forEach(contra => {
+    // Try to find parent account by similar code structure
+    // For asset contra accounts, look for account with similar prefix
+    const contraCodeParts = contra.code.split('-');
+    if (contraCodeParts.length >= 2) {
+      const prefix = contraCodeParts[0];
+      const suffix = contraCodeParts[1];
+      
+      // Look for parent account (usually one number below for depreciation)
+      // e.g., 1-240 (Akumulasi Penyusutan) should link to 1-230 (Kendaraan)
+      regularAssets.forEach(parent => {
+        const parentCodeParts = parent.code.split('-');
+        if (parentCodeParts[0] === prefix) {
+          // Check if codes are related (e.g., 1-230 and 1-240)
+          const parentSuffix = parseInt(parentCodeParts[1]);
+          const contraSuffix = parseInt(suffix);
+          
+          // If contra account code is close to parent (within 20), assume they're related
+          // Also check if name contains similar keywords
+          const nameSimilarity = contra.name.toLowerCase().includes('akumulasi') || 
+                                contra.name.toLowerCase().includes('penyusutan');
+          
+          if (nameSimilarity && Math.abs(contraSuffix - parentSuffix) < 20) {
+            if (!contraToParent[contra.code]) {
+              contraToParent[contra.code] = parent.code;
+            }
+          }
+        }
+      });
+    }
+  });
+  
+  contraLiabilities.forEach(contra => {
+    // Similar logic for liability contra accounts (less common, but possible)
+    const contraCodeParts = contra.code.split('-');
+    if (contraCodeParts.length >= 2) {
+      const prefix = contraCodeParts[0];
+      const contraSuffix = parseInt(contraCodeParts[1]);
+      regularLiabilities.forEach(parent => {
+        const parentCodeParts = parent.code.split('-');
+        if (parentCodeParts[0] === prefix) {
+          const parentSuffix = parseInt(parentCodeParts[1]);
+          if (Math.abs(contraSuffix - parentSuffix) < 20) {
+            if (!contraToParent[contra.code]) {
+              contraToParent[contra.code] = parent.code;
+            }
+          }
+        }
+      });
+    }
+  });
+  
+  // Map assets with contra account information
+  const assets = regularAssets.map(acc => {
+    const amount = balances[acc.code] ? balances[acc.code].balance : 0;
+    const contraInfo = {
+      account: acc.code,
+      name: acc.name,
+      amount: amount,
+      isContra: false,
+      contraAccounts: []
+    };
+    
+    // Find all contra accounts linked to this parent
+    Object.keys(contraToParent).forEach(contraCode => {
+      if (contraToParent[contraCode] === acc.code) {
+        const contraBalance = balances[contraCode] ? balances[contraCode].balance : 0;
+        const contraAccount = accounts.assets.find(a => a.code === contraCode);
+        if (contraAccount) {
+          contraInfo.contraAccounts.push({
+            code: contraCode,
+            name: contraAccount.name,
+            amount: contraBalance
+          });
+        }
+      }
+    });
+    
+    return contraInfo;
+  });
+  
+  // Add contra assets that are not linked (will be shown separately)
+  contraAssets.forEach(contra => {
+    if (!contraToParent[contra.code]) {
+      assets.push({
+        account: contra.code,
+        name: contra.name,
+        amount: balances[contra.code] ? balances[contra.code].balance : 0,
+        isContra: true,
+        contraAccounts: []
+      });
+    }
+  });
+  
+  const liabilities = regularLiabilities.map(acc => ({
     account: acc.code,
     name: acc.name,
-    amount: balances[acc.code] ? balances[acc.code].balance : 0
+    amount: balances[acc.code] ? balances[acc.code].balance : 0,
+    isContra: false
   }));
   
-  const liabilities = (accounts.liabilities || []).map(acc => ({
-    account: acc.code,
-    name: acc.name,
-    amount: balances[acc.code] ? balances[acc.code].balance : 0
-  }));
+  // Add contra liabilities if any
+  contraLiabilities.forEach(contra => {
+    liabilities.push({
+      account: contra.code,
+      name: contra.name,
+      amount: balances[contra.code] ? balances[contra.code].balance : 0,
+      isContra: true
+    });
+  });
   
-  const equityItems = (accounts.equity || []).map(acc => ({
-    account: acc.code,
-    name: acc.name,
-    amount: balances[acc.code] ? balances[acc.code].balance : 0
-  }));
+  // Handle equity accounts with contra accounts (like Prive)
+  const regularEquity = (accounts.equity || []).filter(acc => !acc.isContra);
+  const contraEquity = (accounts.equity || []).filter(acc => acc.isContra);
+  
+  // Link contra equity accounts to their parent (e.g., Prive Amin to Modal Amin)
+  contraEquity.forEach(contra => {
+    const contraCodeParts = contra.code.split('-');
+    if (contraCodeParts.length >= 2) {
+      const prefix = contraCodeParts[0];
+      const contraSuffix = contraCodeParts[1];
+      
+      // Try to find parent equity account
+      regularEquity.forEach(parent => {
+        const parentCodeParts = parent.code.split('-');
+        if (parentCodeParts[0] === prefix) {
+          const parentSuffix = parseInt(parentCodeParts[1]);
+          const contraSuffixNum = parseInt(contraSuffix);
+          
+          // Prive accounts usually follow pattern: 3-101 (Modal) -> 3-301 (Prive)
+          // Check if names are related
+          const nameSimilarity = contra.name.toLowerCase().includes('prive') && 
+                                (parent.name.toLowerCase().includes(contra.name.toLowerCase().replace('prive', '').trim()) ||
+                                 parentCodeParts[1] === contraCodeParts[1]?.substring(0, 3));
+          
+          if ((nameSimilarity || Math.abs(contraSuffixNum - parentSuffix) < 100) && !contraToParent[contra.code]) {
+            contraToParent[contra.code] = parent.code;
+          }
+        }
+      });
+    }
+  });
+  
+  const equityItems = regularEquity.map(acc => {
+    const amount = balances[acc.code] ? balances[acc.code].balance : 0;
+    const contraInfo = {
+      account: acc.code,
+      name: acc.name,
+      amount: amount,
+      isContra: false,
+      contraAccounts: []
+    };
+    
+    // Find contra equity accounts linked to this parent
+    Object.keys(contraToParent).forEach(contraCode => {
+      if (contraToParent[contraCode] === acc.code) {
+        const contraBalance = balances[contraCode] ? balances[contraCode].balance : 0;
+        const contraAccount = accounts.equity.find(a => a.code === contraCode);
+        if (contraAccount) {
+          contraInfo.contraAccounts.push({
+            code: contraCode,
+            name: contraAccount.name,
+            amount: contraBalance
+          });
+        }
+      }
+    });
+    
+    return contraInfo;
+  });
+  
+  // Add unlinked contra equity accounts
+  contraEquity.forEach(contra => {
+    if (!contraToParent[contra.code]) {
+      equityItems.push({
+        account: contra.code,
+        name: contra.name,
+        amount: balances[contra.code] ? balances[contra.code].balance : 0,
+        isContra: true,
+        contraAccounts: []
+      });
+    }
+  });
   
   // Calculate totals for financial position
-  const totalAssets = assets.reduce((sum, a) => sum + (a.amount || 0), 0);
-  const totalLiabilities = liabilities.reduce((sum, l) => sum + (l.amount || 0), 0);
+  // For assets: regular assets minus contra assets
+  const totalRegularAssets = assets
+    .filter(a => !a.isContra)
+    .reduce((sum, a) => {
+      const baseAmount = a.amount || 0;
+      const contraAmount = (a.contraAccounts || []).reduce((cSum, c) => cSum + (c.amount || 0), 0);
+      return sum + baseAmount - contraAmount;
+    }, 0);
+  
+  const totalContraAssets = assets
+    .filter(a => a.isContra && !contraToParent[a.account])
+    .reduce((sum, a) => sum + (a.amount || 0), 0);
+  
+  const totalAssets = totalRegularAssets - totalContraAssets;
+  const totalLiabilities = liabilities
+    .filter(l => !l.isContra)
+    .reduce((sum, l) => sum + (l.amount || 0), 0);
   
   // Get all equity accounts that are capital accounts (excluding retained earnings like 3-200)
-  const capitalAccounts = equityItems.filter(e => e.account !== '3-200');
-  const totalInitialCapitalFromEquity = capitalAccounts.reduce((sum, e) => sum + (e.amount || 0), 0);
+  // Subtract contra accounts from capital accounts
+  const capitalAccounts = equityItems.filter(e => e.account !== '3-200' && !e.isContra);
+  const totalInitialCapitalFromEquity = capitalAccounts.reduce((sum, e) => {
+    const baseAmount = e.amount || 0;
+    const contraAmount = (e.contraAccounts || []).reduce((cSum, c) => cSum + (c.amount || 0), 0);
+    return sum + baseAmount - contraAmount;
+  }, 0);
+  
   const retainedEarnings = equityItems.find(e => e.account === '3-200')?.amount || 0;
   const totalEquity = totalInitialCapitalFromEquity + retainedEarnings + netIncome;
 
@@ -1076,5 +1386,6 @@ module.exports = {
   updateMetadata,
   addAccount,
   updateAccount,
-  deleteAccount
+  deleteAccount,
+  createClosingEntries
 };

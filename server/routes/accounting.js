@@ -15,7 +15,8 @@ const {
   updateAccount,
   deleteAccount,
   getMetadata,
-  updateMetadata
+  updateMetadata,
+  createClosingEntries
 } = require('../services/accountingService');
 
 // Get chart of accounts
@@ -183,6 +184,19 @@ router.put('/metadata', async (req, res) => {
   try {
     const metadata = await updateMetadata(req.body);
     res.json(metadata);
+  } catch (error) {
+    res.status(400).json({ error: error.message });
+  }
+});
+
+// Create closing entries
+router.post('/closing-entries', async (req, res) => {
+  try {
+    const { date, description } = req.body;
+    const result = await createClosingEntries(date, description);
+    // Return updated adjusting entries list (closing entries are stored as adjusting entries)
+    const adjustingEntries = await getAdjustingEntries();
+    res.json({ ...result, adjustingEntries });
   } catch (error) {
     res.status(400).json({ error: error.message });
   }

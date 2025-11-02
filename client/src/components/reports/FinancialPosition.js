@@ -74,39 +74,45 @@ const FinancialPosition = ({ reports, onNextStage, metadata }) => {
               <td></td>
               <td></td>
             </tr>
-            {assets.filter(a => a.account === '1-230').map((asset, idx) => (
-              <tr key={idx}>
-                <td style={{ paddingLeft: '30px' }}>{asset.name}</td>
-                <td className="number">{formatCurrency(asset.amount)}</td>
-                <td></td>
-                <td></td>
-              </tr>
-            ))}
-            {assets.filter(a => a.account === '1-240').map((asset, idx) => {
-              const vehicleAsset = assets.find(a => a.account === '1-230');
-              const netVehicle = vehicleAsset ? vehicleAsset.amount + asset.amount : 0;
+            {/* Fixed Assets with Contra Accounts */}
+            {assets.filter(a => !a.isContra && (a.account.startsWith('1-2') || a.account.startsWith('1-5') || a.account.startsWith('1-6'))).map((asset, idx) => {
+              const contraAmount = (asset.contraAccounts || []).reduce((sum, c) => sum + (c.amount || 0), 0);
+              const netAmount = (asset.amount || 0) - contraAmount;
+              
               return (
                 <React.Fragment key={idx}>
                   <tr>
-                    <td style={{ paddingLeft: '50px', fontStyle: 'italic' }}>
-                      Dikurangi: {asset.name}
-                    </td>
-                    <td className="number" style={{ color: '#d32f2f' }}>
-                      {asset.amount !== 0 ? formatCurrency(asset.amount) : ''}
-                    </td>
+                    <td style={{ paddingLeft: '30px' }}>{asset.name}</td>
+                    <td className="number">{formatCurrency(asset.amount)}</td>
                     <td></td>
                     <td></td>
                   </tr>
-                  <tr className="total-row">
-                    <td style={{ paddingLeft: '30px', fontWeight: 'bold' }}>
-                      Kendaraan (Bersih)
-                    </td>
-                    <td className="number" style={{ fontWeight: 'bold' }}>
-                      {formatCurrency(netVehicle)}
-                    </td>
-                    <td></td>
-                    <td></td>
-                  </tr>
+                  {/* Show contra accounts if any */}
+                  {(asset.contraAccounts || []).filter(c => c.amount !== 0).map((contra, cIdx) => (
+                    <tr key={`contra-${idx}-${cIdx}`}>
+                      <td style={{ paddingLeft: '50px', fontStyle: 'italic' }}>
+                        Dikurangi: {contra.name}
+                      </td>
+                      <td className="number" style={{ color: '#d32f2f' }}>
+                        {formatCurrency(contra.amount)}
+                      </td>
+                      <td></td>
+                      <td></td>
+                    </tr>
+                  ))}
+                  {/* Show net amount if there are contra accounts */}
+                  {contraAmount !== 0 && (
+                    <tr className="total-row">
+                      <td style={{ paddingLeft: '30px', fontWeight: 'bold' }}>
+                        {asset.name} (Bersih)
+                      </td>
+                      <td className="number" style={{ fontWeight: 'bold' }}>
+                        {formatCurrency(netAmount)}
+                      </td>
+                      <td></td>
+                      <td></td>
+                    </tr>
+                  )}
                 </React.Fragment>
               );
             })}
@@ -132,14 +138,47 @@ const FinancialPosition = ({ reports, onNextStage, metadata }) => {
                 EKUITAS
               </td>
             </tr>
-            {equity.filter(eq => eq.account !== '3-200').map((eq, idx) => (
-              <tr key={idx}>
-                <td></td>
-                <td></td>
-                <td style={{ paddingLeft: '30px' }}>{eq.name}</td>
-                <td className="number">{eq.amount !== 0 ? formatCurrency(eq.amount) : ''}</td>
-              </tr>
-            ))}
+            {equity.filter(eq => eq.account !== '3-200' && !eq.isContra).map((eq, idx) => {
+              const contraAmount = (eq.contraAccounts || []).reduce((sum, c) => sum + (c.amount || 0), 0);
+              const netAmount = (eq.amount || 0) - contraAmount;
+              
+              return (
+                <React.Fragment key={idx}>
+                  <tr>
+                    <td></td>
+                    <td></td>
+                    <td style={{ paddingLeft: '30px' }}>{eq.name}</td>
+                    <td className="number">{eq.amount !== 0 ? formatCurrency(eq.amount) : ''}</td>
+                  </tr>
+                  {/* Show contra equity accounts if any (like Prive) */}
+                  {(eq.contraAccounts || []).filter(c => c.amount !== 0).map((contra, cIdx) => (
+                    <tr key={`equity-contra-${idx}-${cIdx}`}>
+                      <td></td>
+                      <td></td>
+                      <td style={{ paddingLeft: '50px', fontStyle: 'italic' }}>
+                        Dikurangi: {contra.name}
+                      </td>
+                      <td className="number" style={{ color: '#d32f2f' }}>
+                        {formatCurrency(contra.amount)}
+                      </td>
+                    </tr>
+                  ))}
+                  {/* Show net amount if there are contra accounts */}
+                  {contraAmount !== 0 && (
+                    <tr>
+                      <td></td>
+                      <td></td>
+                      <td style={{ paddingLeft: '30px', fontWeight: 'bold' }}>
+                        {eq.name} (Bersih)
+                      </td>
+                      <td className="number" style={{ fontWeight: 'bold' }}>
+                        {formatCurrency(netAmount)}
+                      </td>
+                    </tr>
+                  )}
+                </React.Fragment>
+              );
+            })}
             {netIncome !== 0 && (
               <tr>
                 <td></td>

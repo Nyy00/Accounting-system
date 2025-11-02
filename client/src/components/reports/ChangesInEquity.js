@@ -9,7 +9,7 @@ const formatCurrency = (amount) => {
   }).format(amount);
 };
 
-const ChangesInEquity = ({ reports }) => {
+const ChangesInEquity = ({ reports, metadata }) => {
   if (!reports || !reports.changesInEquity) {
     return <div>Memuat data...</div>;
   }
@@ -19,8 +19,13 @@ const ChangesInEquity = ({ reports }) => {
   return (
     <div>
       <h2 className="report-title">S7 - LAPORAN PERUBAHAN EKUITAS</h2>
-      <p className="report-subtitle">CV ABC</p>
-      <p className="report-subtitle">Periode: 31 Januari 2024</p>
+      <p className="report-subtitle">{metadata?.companyName || 'CV ABC'}</p>
+      <p className="report-subtitle">Periode: {metadata?.period || '31 Januari 2024'}</p>
+      {metadata?.createdBy && (
+        <p style={{ textAlign: 'right', marginTop: '10px', fontStyle: 'italic', color: '#666' }}>
+          Dibuat oleh: {metadata.createdBy}
+        </p>
+      )}
       
       <div className="table-container">
         <table className="accounting-table">

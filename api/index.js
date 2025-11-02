@@ -23,7 +23,9 @@ module.exports = async (req, res) => {
     deleteTransaction,
     addAdjustingEntry,
     updateAdjustingEntry,
-    deleteAdjustingEntry
+    deleteAdjustingEntry,
+    getMetadata,
+    updateMetadata
   } = require('../server/services/accountingService');
   
   // Extract path from request
@@ -42,6 +44,8 @@ module.exports = async (req, res) => {
         data = getChartOfAccounts();
       } else if (path === '/accounting/reports') {
         data = calculateReports();
+      } else if (path === '/accounting/metadata') {
+        data = getMetadata();
       } else {
         res.status(404).json({ error: 'Not found' });
         return;
@@ -68,6 +72,12 @@ module.exports = async (req, res) => {
     
     // PUT endpoints
     if (req.method === 'PUT') {
+      if (path === '/accounting/metadata') {
+        data = updateMetadata(req.body);
+        res.status(200).json(data);
+        return;
+      }
+      
       const match = path.match(/\/accounting\/(transactions|adjusting-entries)\/(\d+)/);
       if (match) {
         const type = match[1];

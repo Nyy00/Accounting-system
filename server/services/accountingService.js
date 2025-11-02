@@ -10,6 +10,7 @@ const DATA_DIR = process.env.DATA_DIR || (
 const TRANSACTIONS_FILE = path.join(DATA_DIR, 'transactions.json');
 const ADJUSTING_ENTRIES_FILE = path.join(DATA_DIR, 'adjusting-entries.json');
 const STATE_FILE = path.join(DATA_DIR, 'state.json');
+const METADATA_FILE = path.join(DATA_DIR, 'metadata.json');
 
 // Ensure data directory exists
 if (!fs.existsSync(DATA_DIR)) {
@@ -579,6 +580,31 @@ const calculateReports = () => {
   };
 };
 
+// Metadata functions (Judul, Periode, Nama Pembuat)
+const defaultMetadata = {
+  companyName: 'CV ABC',
+  reportTitle: 'Sistem Akuntansi CV ABC',
+  period: 'Januari 2024',
+  periodDetail: 'Bulan Januari 2024',
+  createdBy: '',
+  date: new Date().toISOString().split('T')[0]
+};
+
+const getMetadata = () => {
+  return readJsonFile(METADATA_FILE, defaultMetadata);
+};
+
+const updateMetadata = (metadata) => {
+  const currentMetadata = getMetadata();
+  const updatedMetadata = {
+    ...currentMetadata,
+    ...metadata,
+    date: metadata.date || currentMetadata.date || new Date().toISOString().split('T')[0]
+  };
+  writeJsonFile(METADATA_FILE, updatedMetadata);
+  return updatedMetadata;
+};
+
 module.exports = {
   getChartOfAccounts,
   getTransactions,
@@ -590,6 +616,8 @@ module.exports = {
   deleteTransaction,
   addAdjustingEntry,
   updateAdjustingEntry,
-  deleteAdjustingEntry
+  deleteAdjustingEntry,
+  getMetadata,
+  updateMetadata
 };
 

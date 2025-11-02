@@ -12,7 +12,7 @@ const formatCurrency = (amount) => {
   }).format(amount);
 };
 
-const GeneralJournal = ({ transactions, onRefresh }) => {
+const GeneralJournal = ({ transactions, onRefresh, onNextStage, metadata }) => {
   const [showForm, setShowForm] = useState(false);
   const [editingTransaction, setEditingTransaction] = useState(null);
   const [localTransactions, setLocalTransactions] = useState([]);
@@ -69,12 +69,33 @@ const GeneralJournal = ({ transactions, onRefresh }) => {
   return (
     <div>
       <h2 className="report-title">S1 - JURNAL UMUM</h2>
-      <p className="report-subtitle">Periode: Januari 2024</p>
+      <p className="report-subtitle">Periode: {metadata?.period || 'Januari 2024'}</p>
+      {metadata?.createdBy && (
+        <p style={{ textAlign: 'right', marginTop: '10px', fontStyle: 'italic', color: '#666' }}>
+          Dibuat oleh: {metadata.createdBy}
+        </p>
+      )}
       
       <div className="action-buttons">
         <button onClick={handleAddClick} className="btn-primary">
           + Tambah Transaksi
         </button>
+        {localTransactions.length > 0 && (
+          <button 
+            onClick={async () => {
+              if (onRefresh) {
+                await onRefresh();
+              }
+              if (onNextStage) {
+                onNextStage();
+              }
+            }} 
+            className="btn-success"
+            style={{ marginLeft: '10px', backgroundColor: '#28a745', color: 'white' }}
+          >
+            ➜ Proses ke Tahap Selanjutnya (S2 - Buku Besar)
+          </button>
+        )}
       </div>
       
       {showForm && (

@@ -33,7 +33,7 @@ const getAccountName = (code) => {
   return accounts[code] || code;
 };
 
-const GeneralLedger = ({ transactions, adjustingEntries }) => {
+const GeneralLedger = ({ transactions, adjustingEntries, onNextStage, metadata }) => {
   const ledgerData = useMemo(() => {
     const accounts = {};
     
@@ -110,7 +110,24 @@ const GeneralLedger = ({ transactions, adjustingEntries }) => {
   return (
     <div>
       <h2 className="report-title">S2 - BUKU BESAR</h2>
-      <p className="report-subtitle">Periode: Januari 2024</p>
+      <p className="report-subtitle">Periode: {metadata?.period || 'Januari 2024'}</p>
+      {metadata?.createdBy && (
+        <p style={{ textAlign: 'right', marginTop: '10px', fontStyle: 'italic', color: '#666' }}>
+          Dibuat oleh: {metadata.createdBy}
+        </p>
+      )}
+      
+      <div className="action-buttons">
+        {onNextStage && (
+          <button 
+            onClick={onNextStage} 
+            className="btn-success"
+            style={{ backgroundColor: '#28a745', color: 'white', marginBottom: '20px' }}
+          >
+            ➜ Proses ke Tahap Selanjutnya (S3 - Neraca Saldo)
+          </button>
+        )}
+      </div>
       
       {ledgerData.map((account, idx) => (
         <div key={idx} style={{ marginBottom: '40px' }}>

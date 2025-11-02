@@ -9,7 +9,7 @@ const formatCurrency = (amount) => {
   }).format(amount);
 };
 
-const TrialBalance = ({ reports }) => {
+const TrialBalance = ({ reports, onNextStage, metadata }) => {
   if (!reports || !reports.trialBalance) {
     return <div>Memuat data...</div>;
   }
@@ -20,7 +20,24 @@ const TrialBalance = ({ reports }) => {
   return (
     <div>
       <h2 className="report-title">S3 - NERACA SALDO</h2>
-      <p className="report-subtitle">Periode: Januari 2024</p>
+      <p className="report-subtitle">Periode: {metadata?.period || 'Januari 2024'}</p>
+      {metadata?.createdBy && (
+        <p style={{ textAlign: 'right', marginTop: '10px', fontStyle: 'italic', color: '#666' }}>
+          Dibuat oleh: {metadata.createdBy}
+        </p>
+      )}
+      
+      <div className="action-buttons">
+        {onNextStage && (
+          <button 
+            onClick={onNextStage} 
+            className="btn-success"
+            style={{ backgroundColor: '#28a745', color: 'white', marginBottom: '20px' }}
+          >
+            ➜ Proses ke Tahap Selanjutnya (S4 - Neraca Saldo Setelah Penyesuaian)
+          </button>
+        )}
+      </div>
       
       <div className="table-container">
         <table className="accounting-table">

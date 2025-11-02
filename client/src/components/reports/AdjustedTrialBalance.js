@@ -12,7 +12,7 @@ const formatCurrency = (amount) => {
   }).format(amount);
 };
 
-const AdjustedTrialBalance = ({ reports, adjustingEntries, onRefresh }) => {
+const AdjustedTrialBalance = ({ reports, adjustingEntries, onRefresh, onNextStage, metadata }) => {
   const [showAdjustingForm, setShowAdjustingForm] = useState(false);
   const [editingEntry, setEditingEntry] = useState(null);
   const [view, setView] = useState('report'); // 'report' or 'adjusting'
@@ -76,6 +76,18 @@ const AdjustedTrialBalance = ({ reports, adjustingEntries, onRefresh }) => {
 
   const renderReport = () => (
     <>
+      <div className="action-buttons" style={{ marginBottom: '20px' }}>
+        {onNextStage && (
+          <button 
+            onClick={onNextStage} 
+            className="btn-success"
+            style={{ backgroundColor: '#28a745', color: 'white' }}
+          >
+            ➜ Proses ke Tahap Selanjutnya (S5 - Laporan Laba Rugi)
+          </button>
+        )}
+      </div>
+      
       {localAdjustingEntries && localAdjustingEntries.length > 0 && (
         <div style={{ marginBottom: '20px', padding: '15px', backgroundColor: '#fff9e6', borderRadius: '6px', border: '1px solid #ffd700' }}>
           <h3 style={{ marginBottom: '10px', color: '#b8860b' }}>Jurnal Penyesuaian:</h3>
@@ -228,7 +240,12 @@ const AdjustedTrialBalance = ({ reports, adjustingEntries, onRefresh }) => {
   return (
     <div>
       <h2 className="report-title">S4 - NERACA SALDO SETELAH PENYESUAIAN</h2>
-      <p className="report-subtitle">Periode: Januari 2024</p>
+      <p className="report-subtitle">Periode: {metadata?.period || 'Januari 2024'}</p>
+      {metadata?.createdBy && (
+        <p style={{ textAlign: 'right', marginTop: '10px', fontStyle: 'italic', color: '#666' }}>
+          Dibuat oleh: {metadata.createdBy}
+        </p>
+      )}
       
       <div className="action-buttons">
         <button 

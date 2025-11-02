@@ -9,7 +9,7 @@ const formatCurrency = (amount) => {
   }).format(amount);
 };
 
-const FinancialPosition = ({ reports }) => {
+const FinancialPosition = ({ reports, onNextStage, metadata }) => {
   if (!reports || !reports.financialPosition) {
     return <div>Memuat data...</div>;
   }
@@ -19,8 +19,25 @@ const FinancialPosition = ({ reports }) => {
   return (
     <div>
       <h2 className="report-title">S6 - LAPORAN POSISI KEUANGAN</h2>
-      <p className="report-subtitle">CV ABC</p>
-      <p className="report-subtitle">Per 31 Januari 2024</p>
+      <p className="report-subtitle">{metadata?.companyName || 'CV ABC'}</p>
+      <p className="report-subtitle">Per {metadata?.period || '31 Januari 2024'}</p>
+      {metadata?.createdBy && (
+        <p style={{ textAlign: 'right', marginTop: '10px', fontStyle: 'italic', color: '#666' }}>
+          Dibuat oleh: {metadata.createdBy}
+        </p>
+      )}
+      
+      <div className="action-buttons">
+        {onNextStage && (
+          <button 
+            onClick={onNextStage} 
+            className="btn-success"
+            style={{ backgroundColor: '#28a745', color: 'white', marginBottom: '20px' }}
+          >
+            ➜ Proses ke Tahap Selanjutnya (S7 - Laporan Perubahan Ekuitas)
+          </button>
+        )}
+      </div>
       
       <div className="table-container">
         <table className="accounting-table">

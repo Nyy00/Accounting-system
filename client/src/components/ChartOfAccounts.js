@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import axios from 'axios';
 import API_URL from '../config';
 import '../App.css';
@@ -16,11 +16,7 @@ const ChartOfAccounts = ({ onRefresh }) => {
     isContra: false
   });
 
-  useEffect(() => {
-    fetchAccounts();
-  }, []);
-
-  const fetchAccounts = async () => {
+  const fetchAccounts = useCallback(async () => {
     try {
       const response = await axios.get(`${API_URL}/api/accounting/chart-of-accounts`);
       setChartOfAccounts(response.data);
@@ -34,7 +30,11 @@ const ChartOfAccounts = ({ onRefresh }) => {
       console.error('Error fetching accounts:', error);
       setLoading(false);
     }
-  };
+  }, [onRefresh]);
+
+  useEffect(() => {
+    fetchAccounts();
+  }, [fetchAccounts]);
 
   const handleAddClick = () => {
     setEditingAccount(null);

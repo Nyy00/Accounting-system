@@ -156,17 +156,17 @@ const GeneralLedger = ({ transactions, adjustingEntries, onNextStage, metadata }
         </div>
       ))}
       
-      <div className="action-buttons" style={{ marginTop: '40px' }}>
-        {onNextStage && (
+      {onNextStage && (
+        <div style={{ marginTop: '40px', textAlign: 'left' }}>
           <button 
             onClick={onNextStage} 
             className="btn-success"
-            style={{ backgroundColor: '#28a745', color: 'white' }}
+            style={{ backgroundColor: '#2196F3', color: 'white', padding: '12px 24px', fontSize: '16px', borderRadius: '6px', border: 'none', cursor: 'pointer' }}
           >
             ➜ Proses ke Tahap Selanjutnya (S3 - Neraca Saldo)
           </button>
-        )}
-      </div>
+        </div>
+      )}
     </div>
   );
 };

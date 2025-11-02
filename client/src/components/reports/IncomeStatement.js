@@ -92,17 +92,17 @@ const IncomeStatement = ({ reports, onNextStage, metadata }) => {
         Laba/Rugi Bersih = {formatCurrency(totalRevenue)} - {formatCurrency(totalExpenses)} = {formatCurrency(netIncome)}
       </div>
       
-      <div className="action-buttons" style={{ marginTop: '20px' }}>
-        {onNextStage && (
+      {onNextStage && (
+        <div style={{ marginTop: '20px', textAlign: 'left' }}>
           <button 
             onClick={onNextStage} 
             className="btn-success"
-            style={{ backgroundColor: '#28a745', color: 'white' }}
+            style={{ backgroundColor: '#2196F3', color: 'white', padding: '12px 24px', fontSize: '16px', borderRadius: '6px', border: 'none', cursor: 'pointer' }}
           >
             ➜ Proses ke Tahap Selanjutnya (S6 - Laporan Posisi Keuangan)
           </button>
-        )}
-      </div>
+        </div>
+      )}
     </div>
   );
 };

@@ -71,7 +71,7 @@ const getChartOfAccounts = async () => {
 };
 
 // CRUD Operations for Chart of Accounts
-const addAccount = (account) => {
+const addAccount = async (account) => {
   const { code, name, type, isContra } = account;
   
   if (!code || !name || !type) {
@@ -81,17 +81,21 @@ const addAccount = (account) => {
   const database = db();
   
   // Check if code already exists
-  const existing = database.prepare('SELECT code FROM chart_of_accounts WHERE code = ?').get(code);
+  const existingPromise = database.prepare('SELECT code FROM chart_of_accounts WHERE code = ?').get(code);
+  const existing = isAsyncDb() ? await existingPromise : existingPromise;
+  
   if (existing) {
     throw new Error(`Account code ${code} already exists`);
   }
   
   // Insert new account
   try {
-    database.prepare(`
+    const runPromise = database.prepare(`
       INSERT INTO chart_of_accounts (code, name, type, is_contra)
       VALUES (?, ?, ?, ?)
     `).run(code, name, type, isContra ? 1 : 0);
+    
+    await runQuery(() => runPromise);
     
     return { code, name, type, isContra: isContra || false };
   } catch (error) {
@@ -99,7 +103,7 @@ const addAccount = (account) => {
   }
 };
 
-const updateAccount = (code, account) => {
+const updateAccount = async (code, account) => {
   const { name, type, isContra } = account;
   
   if (!name || !type) {
@@ -109,18 +113,22 @@ const updateAccount = (code, account) => {
   const database = db();
   
   // Check if account exists
-  const existing = database.prepare('SELECT code FROM chart_of_accounts WHERE code = ?').get(code);
+  const existingPromise = database.prepare('SELECT code FROM chart_of_accounts WHERE code = ?').get(code);
+  const existing = isAsyncDb() ? await existingPromise : existingPromise;
+  
   if (!existing) {
     throw new Error('Account not found');
   }
   
   // Update account
   try {
-    database.prepare(`
+    const runPromise = database.prepare(`
       UPDATE chart_of_accounts 
       SET name = ?, type = ?, is_contra = ?, updated_at = CURRENT_TIMESTAMP
       WHERE code = ?
     `).run(name, type, isContra ? 1 : 0, code);
+    
+    await runQuery(() => runPromise);
     
     return { code, name, type, isContra: isContra || false };
   } catch (error) {
@@ -128,31 +136,37 @@ const updateAccount = (code, account) => {
   }
 };
 
-const deleteAccount = (code) => {
+const deleteAccount = async (code) => {
   const database = db();
   
   // Check if account exists
-  const existing = database.prepare('SELECT code FROM chart_of_accounts WHERE code = ?').get(code);
+  const existingPromise = database.prepare('SELECT code FROM chart_of_accounts WHERE code = ?').get(code);
+  const existing = isAsyncDb() ? await existingPromise : existingPromise;
+  
   if (!existing) {
     throw new Error('Account not found');
   }
   
   // Check if account is used in transactions or adjusting entries
-  const usedInTransactions = database.prepare(`
+  const usedInTransactionsPromise = database.prepare(`
     SELECT COUNT(*) as count FROM transaction_entries WHERE account_code = ?
   `).get(code);
   
-  const usedInAdjustments = database.prepare(`
+  const usedInAdjustmentsPromise = database.prepare(`
     SELECT COUNT(*) as count FROM adjusting_entry_entries WHERE account_code = ?
   `).get(code);
   
-  if (usedInTransactions.count > 0 || usedInAdjustments.count > 0) {
+  const usedInTransactions = isAsyncDb() ? await usedInTransactionsPromise : usedInTransactionsPromise;
+  const usedInAdjustments = isAsyncDb() ? await usedInAdjustmentsPromise : usedInAdjustmentsPromise;
+  
+  if ((usedInTransactions?.count || 0) > 0 || (usedInAdjustments?.count || 0) > 0) {
     throw new Error(`Cannot delete account ${code}: Account is used in transactions or adjusting entries`);
   }
   
   // Delete account
   try {
-    database.prepare('DELETE FROM chart_of_accounts WHERE code = ?').run(code);
+    const runPromise = database.prepare('DELETE FROM chart_of_accounts WHERE code = ?').run(code);
+    await runQuery(() => runPromise);
     return true;
   } catch (error) {
     throw new Error(`Failed to delete account: ${error.message}`);
@@ -160,46 +174,50 @@ const deleteAccount = (code) => {
 };
 
 // CRUD Operations for Transactions
-const getTransactions = () => {
+const getTransactions = async () => {
   const database = db();
   
   try {
-    const transactions = database.prepare(`
+    const transactionsPromise = database.prepare(`
       SELECT id, date, description 
       FROM transactions 
       ORDER BY date, id
     `).all();
+    const transactions = isAsyncDb() ? await transactionsPromise : transactionsPromise;
     
     if (!transactions || transactions.length === 0) {
       return [];
     }
     
-    return transactions.map(trans => {
-      const entries = database.prepare(`
+    const result = await Promise.all(transactions.map(async (trans) => {
+      const entriesPromise = database.prepare(`
         SELECT account_code as account, debit, credit
         FROM transaction_entries
         WHERE transaction_id = ?
         ORDER BY id
       `).all(trans.id);
+      const entries = isAsyncDb() ? await entriesPromise : entriesPromise;
       
       return {
         id: trans.id,
         date: trans.date,
         description: trans.description,
-        entries: entries.map(e => ({
+        entries: (Array.isArray(entries) ? entries : []).map(e => ({
           account: e.account,
           debit: e.debit || 0,
           credit: e.credit || 0
         }))
       };
-    });
+    }));
+    
+    return result;
   } catch (error) {
     console.error('Error getting transactions:', error);
     return [];
   }
 };
 
-const addTransaction = (transaction) => {
+const addTransaction = async (transaction) => {
   const { date, description, entries } = transaction;
   
   if (!date || !description || !entries || entries.length < 2) {
@@ -217,49 +235,37 @@ const addTransaction = (transaction) => {
   const database = db();
   
   try {
-    // Begin transaction
-    const insertTransaction = database.prepare(`
+    // Insert transaction
+    const insertTransactionPromise = database.prepare(`
       INSERT INTO transactions (date, description)
       VALUES (?, ?)
-    `);
+    `).run(date, description);
     
+    const result = await runQuery(() => insertTransactionPromise);
+    const transactionId = result.lastInsertRowid;
+    
+    // Insert entries
     const insertEntry = database.prepare(`
       INSERT INTO transaction_entries (transaction_id, account_code, debit, credit)
       VALUES (?, ?, ?, ?)
     `);
     
-    const insertTransactionMany = database.transaction((transactions) => {
-      for (const trans of transactions) {
-        const result = insertTransaction.run(trans.date, trans.description);
-        const transactionId = result.lastInsertRowid;
-        
-        for (const entry of trans.entries) {
-          insertEntry.run(
-            transactionId,
-            entry.account,
-            entry.debit || 0,
-            entry.credit || 0
-          );
-        }
-      }
-    });
-    
-    const result = insertTransaction.run(date, description);
-    const transactionId = result.lastInsertRowid;
-    
     for (const entry of entries) {
       // Verify account exists
-      const account = database.prepare('SELECT code FROM chart_of_accounts WHERE code = ?').get(entry.account);
+      const accountPromise = database.prepare('SELECT code FROM chart_of_accounts WHERE code = ?').get(entry.account);
+      const account = isAsyncDb() ? await accountPromise : accountPromise;
+      
       if (!account) {
         throw new Error(`Account ${entry.account} does not exist`);
       }
       
-      insertEntry.run(
+      const runPromise = insertEntry.run(
         transactionId,
         entry.account,
         entry.debit || 0,
         entry.credit || 0
       );
+      await runQuery(() => runPromise);
     }
     
     return {
@@ -273,7 +279,7 @@ const addTransaction = (transaction) => {
   }
 };
 
-const updateTransaction = (id, transaction) => {
+const updateTransaction = async (id, transaction) => {
   const { date, description, entries } = transaction;
   
   if (!date || !description || !entries || entries.length < 2) {
@@ -291,21 +297,25 @@ const updateTransaction = (id, transaction) => {
   const database = db();
   
   // Check if transaction exists
-  const existing = database.prepare('SELECT id FROM transactions WHERE id = ?').get(id);
+  const existingPromise = database.prepare('SELECT id FROM transactions WHERE id = ?').get(id);
+  const existing = isAsyncDb() ? await existingPromise : existingPromise;
+  
   if (!existing) {
     throw new Error('Transaction not found');
   }
   
   try {
     // Update transaction
-    database.prepare(`
+    const updatePromise = database.prepare(`
       UPDATE transactions 
       SET date = ?, description = ?, updated_at = CURRENT_TIMESTAMP
       WHERE id = ?
     `).run(date, description, id);
+    await runQuery(() => updatePromise);
     
     // Delete old entries
-    database.prepare('DELETE FROM transaction_entries WHERE transaction_id = ?').run(id);
+    const deletePromise = database.prepare('DELETE FROM transaction_entries WHERE transaction_id = ?').run(id);
+    await runQuery(() => deletePromise);
     
     // Insert new entries
     const insertEntry = database.prepare(`
@@ -315,17 +325,20 @@ const updateTransaction = (id, transaction) => {
     
     for (const entry of entries) {
       // Verify account exists
-      const account = database.prepare('SELECT code FROM chart_of_accounts WHERE code = ?').get(entry.account);
+      const accountPromise = database.prepare('SELECT code FROM chart_of_accounts WHERE code = ?').get(entry.account);
+      const account = isAsyncDb() ? await accountPromise : accountPromise;
+      
       if (!account) {
         throw new Error(`Account ${entry.account} does not exist`);
       }
       
-      insertEntry.run(
+      const runPromise = insertEntry.run(
         id,
         entry.account,
         entry.debit || 0,
         entry.credit || 0
       );
+      await runQuery(() => runPromise);
     }
     
     return {
@@ -339,21 +352,25 @@ const updateTransaction = (id, transaction) => {
   }
 };
 
-const deleteTransaction = (id) => {
+const deleteTransaction = async (id) => {
   const database = db();
   
   // Check if transaction exists
-  const existing = database.prepare('SELECT id FROM transactions WHERE id = ?').get(id);
+  const existingPromise = database.prepare('SELECT id FROM transactions WHERE id = ?').get(id);
+  const existing = isAsyncDb() ? await existingPromise : existingPromise;
+  
   if (!existing) {
     throw new Error('Transaction not found');
   }
   
   try {
     // Delete entries first (foreign key cascade should handle this, but explicit is better)
-    database.prepare('DELETE FROM transaction_entries WHERE transaction_id = ?').run(id);
+    const deleteEntriesPromise = database.prepare('DELETE FROM transaction_entries WHERE transaction_id = ?').run(id);
+    await runQuery(() => deleteEntriesPromise);
     
     // Delete transaction
-    database.prepare('DELETE FROM transactions WHERE id = ?').run(id);
+    const deleteTransPromise = database.prepare('DELETE FROM transactions WHERE id = ?').run(id);
+    await runQuery(() => deleteTransPromise);
     
     return true;
   } catch (error) {
@@ -362,46 +379,50 @@ const deleteTransaction = (id) => {
 };
 
 // CRUD Operations for Adjusting Entries
-const getAdjustingEntries = () => {
+const getAdjustingEntries = async () => {
   const database = db();
   
   try {
-    const entries = database.prepare(`
+    const entriesPromise = database.prepare(`
       SELECT id, date, description 
       FROM adjusting_entries 
       ORDER BY date, id
     `).all();
+    const entries = isAsyncDb() ? await entriesPromise : entriesPromise;
     
     if (!entries || entries.length === 0) {
       return [];
     }
     
-    return entries.map(entry => {
-      const entryEntries = database.prepare(`
+    const result = await Promise.all(entries.map(async (entry) => {
+      const entryEntriesPromise = database.prepare(`
         SELECT account_code as account, debit, credit
         FROM adjusting_entry_entries
         WHERE adjusting_entry_id = ?
         ORDER BY id
       `).all(entry.id);
+      const entryEntries = isAsyncDb() ? await entryEntriesPromise : entryEntriesPromise;
       
       return {
         id: entry.id,
         date: entry.date,
         description: entry.description,
-        entries: entryEntries.map(e => ({
+        entries: (Array.isArray(entryEntries) ? entryEntries : []).map(e => ({
           account: e.account,
           debit: e.debit || 0,
           credit: e.credit || 0
         }))
       };
-    });
+    }));
+    
+    return result;
   } catch (error) {
     console.error('Error getting adjusting entries:', error);
     return [];
   }
 };
 
-const addAdjustingEntry = (entry) => {
+const addAdjustingEntry = async (entry) => {
   const { date, description, entries } = entry;
   
   if (!date || !description || !entries || entries.length < 2) {
@@ -420,11 +441,12 @@ const addAdjustingEntry = (entry) => {
   
   try {
     // Insert adjusting entry
-    const result = database.prepare(`
+    const resultPromise = database.prepare(`
       INSERT INTO adjusting_entries (date, description)
       VALUES (?, ?)
     `).run(date, description);
     
+    const result = await runQuery(() => resultPromise);
     const entryId = result.lastInsertRowid;
     
     // Insert entries
@@ -435,17 +457,20 @@ const addAdjustingEntry = (entry) => {
     
     for (const e of entries) {
       // Verify account exists
-      const account = database.prepare('SELECT code FROM chart_of_accounts WHERE code = ?').get(e.account);
+      const accountPromise = database.prepare('SELECT code FROM chart_of_accounts WHERE code = ?').get(e.account);
+      const account = isAsyncDb() ? await accountPromise : accountPromise;
+      
       if (!account) {
         throw new Error(`Account ${e.account} does not exist`);
       }
       
-      insertEntryEntry.run(
+      const runPromise = insertEntryEntry.run(
         entryId,
         e.account,
         e.debit || 0,
         e.credit || 0
       );
+      await runQuery(() => runPromise);
     }
     
     return {
@@ -459,7 +484,7 @@ const addAdjustingEntry = (entry) => {
   }
 };
 
-const updateAdjustingEntry = (id, entry) => {
+const updateAdjustingEntry = async (id, entry) => {
   const { date, description, entries } = entry;
   
   if (!date || !description || !entries || entries.length < 2) {
@@ -477,21 +502,25 @@ const updateAdjustingEntry = (id, entry) => {
   const database = db();
   
   // Check if entry exists
-  const existing = database.prepare('SELECT id FROM adjusting_entries WHERE id = ?').get(id);
+  const existingPromise = database.prepare('SELECT id FROM adjusting_entries WHERE id = ?').get(id);
+  const existing = isAsyncDb() ? await existingPromise : existingPromise;
+  
   if (!existing) {
     throw new Error('Adjusting entry not found');
   }
   
   try {
     // Update adjusting entry
-    database.prepare(`
+    const updatePromise = database.prepare(`
       UPDATE adjusting_entries 
       SET date = ?, description = ?, updated_at = CURRENT_TIMESTAMP
       WHERE id = ?
     `).run(date, description, id);
+    await runQuery(() => updatePromise);
     
     // Delete old entries
-    database.prepare('DELETE FROM adjusting_entry_entries WHERE adjusting_entry_id = ?').run(id);
+    const deletePromise = database.prepare('DELETE FROM adjusting_entry_entries WHERE adjusting_entry_id = ?').run(id);
+    await runQuery(() => deletePromise);
     
     // Insert new entries
     const insertEntryEntry = database.prepare(`
@@ -501,17 +530,20 @@ const updateAdjustingEntry = (id, entry) => {
     
     for (const e of entries) {
       // Verify account exists
-      const account = database.prepare('SELECT code FROM chart_of_accounts WHERE code = ?').get(e.account);
+      const accountPromise = database.prepare('SELECT code FROM chart_of_accounts WHERE code = ?').get(e.account);
+      const account = isAsyncDb() ? await accountPromise : accountPromise;
+      
       if (!account) {
         throw new Error(`Account ${e.account} does not exist`);
       }
       
-      insertEntryEntry.run(
+      const runPromise = insertEntryEntry.run(
         id,
         e.account,
         e.debit || 0,
         e.credit || 0
       );
+      await runQuery(() => runPromise);
     }
     
     return {
@@ -525,21 +557,25 @@ const updateAdjustingEntry = (id, entry) => {
   }
 };
 
-const deleteAdjustingEntry = (id) => {
+const deleteAdjustingEntry = async (id) => {
   const database = db();
   
   // Check if entry exists
-  const existing = database.prepare('SELECT id FROM adjusting_entries WHERE id = ?').get(id);
+  const existingPromise = database.prepare('SELECT id FROM adjusting_entries WHERE id = ?').get(id);
+  const existing = isAsyncDb() ? await existingPromise : existingPromise;
+  
   if (!existing) {
     throw new Error('Adjusting entry not found');
   }
   
   try {
     // Delete entries first
-    database.prepare('DELETE FROM adjusting_entry_entries WHERE adjusting_entry_id = ?').run(id);
+    const deleteEntriesPromise = database.prepare('DELETE FROM adjusting_entry_entries WHERE adjusting_entry_id = ?').run(id);
+    await runQuery(() => deleteEntriesPromise);
     
     // Delete adjusting entry
-    database.prepare('DELETE FROM adjusting_entries WHERE id = ?').run(id);
+    const deleteEntryPromise = database.prepare('DELETE FROM adjusting_entries WHERE id = ?').run(id);
+    await runQuery(() => deleteEntryPromise);
     
     return true;
   } catch (error) {
@@ -548,17 +584,17 @@ const deleteAdjustingEntry = (id) => {
 };
 
 // Calculate all account balances
-const calculateAccountBalances = () => {
-  const accounts = getChartOfAccounts();
-  const transactions = getTransactions();
-  const adjustments = getAdjustingEntries();
+const calculateAccountBalances = async () => {
+  const accounts = await getChartOfAccounts();
+  const transactions = await getTransactions();
+  const adjustments = await getAdjustingEntries();
   
   const allAccounts = [
-    ...accounts.assets,
-    ...accounts.liabilities,
-    ...accounts.equity,
-    ...accounts.revenue,
-    ...accounts.expenses
+    ...(accounts.assets || []),
+    ...(accounts.liabilities || []),
+    ...(accounts.equity || []),
+    ...(accounts.revenue || []),
+    ...(accounts.expenses || [])
   ];
   
   const balances = {};
@@ -577,32 +613,64 @@ const calculateAccountBalances = () => {
   });
   
   // Process regular transactions
-  transactions.forEach(trans => {
-    trans.entries.forEach(entry => {
-      if (balances[entry.account]) {
-        balances[entry.account].debit += entry.debit;
-        balances[entry.account].credit += entry.credit;
+  if (Array.isArray(transactions)) {
+    transactions.forEach(trans => {
+      if (trans && trans.entries && Array.isArray(trans.entries)) {
+        trans.entries.forEach(entry => {
+          if (entry && entry.account) {
+            if (!balances[entry.account]) {
+              balances[entry.account] = {
+                code: entry.account,
+                name: entry.account,
+                type: 'unknown',
+                isContra: false,
+                debit: 0,
+                credit: 0,
+                balance: 0
+              };
+            }
+            balances[entry.account].debit += entry.debit || 0;
+            balances[entry.account].credit += entry.credit || 0;
+          }
+        });
       }
     });
-  });
+  }
   
   // Process adjusting entries
-  adjustments.forEach(adj => {
-    adj.entries.forEach(entry => {
-      if (balances[entry.account]) {
-        balances[entry.account].debit += entry.debit;
-        balances[entry.account].credit += entry.credit;
+  if (Array.isArray(adjustments)) {
+    adjustments.forEach(adj => {
+      if (adj && adj.entries && Array.isArray(adj.entries)) {
+        adj.entries.forEach(entry => {
+          if (entry && entry.account) {
+            if (!balances[entry.account]) {
+              balances[entry.account] = {
+                code: entry.account,
+                name: entry.account,
+                type: 'unknown',
+                isContra: false,
+                debit: 0,
+                credit: 0,
+                balance: 0
+              };
+            }
+            balances[entry.account].debit += entry.debit || 0;
+            balances[entry.account].credit += entry.credit || 0;
+          }
+        });
       }
     });
-  });
+  }
   
   // Calculate balances
   allAccounts.forEach(acc => {
     const bal = balances[acc.code];
-    if (acc.type === 'asset' || acc.type === 'expense') {
-      bal.balance = bal.debit - bal.credit;
-    } else if (acc.type === 'liability' || acc.type === 'equity' || acc.type === 'revenue') {
-      bal.balance = bal.credit - bal.debit;
+    if (bal) {
+      if (acc.type === 'asset' || acc.type === 'expense') {
+        bal.balance = bal.debit - bal.credit;
+      } else if (acc.type === 'liability' || acc.type === 'equity' || acc.type === 'revenue') {
+        bal.balance = bal.credit - bal.debit;
+      }
     }
   });
   
@@ -610,9 +678,9 @@ const calculateAccountBalances = () => {
 };
 
 // Calculate all reports
-const calculateReports = () => {
-  const balances = calculateAccountBalances();
-  const accounts = getChartOfAccounts();
+const calculateReports = async () => {
+  const balances = await calculateAccountBalances();
+  const accounts = await getChartOfAccounts();
   
   // S3 - Trial Balance (Neraca Saldo)
   const trialBalance = Object.values(balances)
@@ -636,13 +704,13 @@ const calculateReports = () => {
     }));
   
   // S5 - Income Statement
-  const revenues = accounts.revenue.map(acc => ({
+  const revenues = (accounts.revenue || []).map(acc => ({
     account: acc.code,
     name: acc.name,
     amount: balances[acc.code] ? balances[acc.code].balance : 0
   }));
   
-  const expenses = accounts.expenses.map(acc => ({
+  const expenses = (accounts.expenses || []).map(acc => ({
     account: acc.code,
     name: acc.name,
     amount: balances[acc.code] ? balances[acc.code].balance : 0
@@ -653,19 +721,19 @@ const calculateReports = () => {
   const netIncome = totalRevenue - totalExpenses;
   
   // S6 - Statement of Financial Position
-  const assets = accounts.assets.map(acc => ({
+  const assets = (accounts.assets || []).map(acc => ({
     account: acc.code,
     name: acc.name,
     amount: balances[acc.code] ? balances[acc.code].balance : 0
   }));
   
-  const liabilities = accounts.liabilities.map(acc => ({
+  const liabilities = (accounts.liabilities || []).map(acc => ({
     account: acc.code,
     name: acc.name,
     amount: balances[acc.code] ? balances[acc.code].balance : 0
   }));
   
-  const equityItems = accounts.equity.map(acc => ({
+  const equityItems = (accounts.equity || []).map(acc => ({
     account: acc.code,
     name: acc.name,
     amount: balances[acc.code] ? balances[acc.code].balance : 0
@@ -746,14 +814,15 @@ const defaultMetadata = {
   date: new Date().toISOString().split('T')[0]
 };
 
-const getMetadata = () => {
+const getMetadata = async () => {
   const database = db();
   
   try {
-    const metadata = database.prepare('SELECT * FROM metadata').all();
+    const metadataPromise = database.prepare('SELECT * FROM metadata').all();
+    const metadata = isAsyncDb() ? await metadataPromise : metadataPromise;
     const result = { ...defaultMetadata };
     
-    if (metadata && metadata.length > 0) {
+    if (metadata && Array.isArray(metadata) && metadata.length > 0) {
       metadata.forEach(row => {
         try {
           result[row.key] = JSON.parse(row.value);
@@ -770,9 +839,9 @@ const getMetadata = () => {
   }
 };
 
-const updateMetadata = (metadata) => {
+const updateMetadata = async (metadata) => {
   const database = db();
-  const currentMetadata = getMetadata();
+  const currentMetadata = await getMetadata();
   const updatedMetadata = {
     ...currentMetadata,
     ...metadata,
@@ -785,13 +854,16 @@ const updateMetadata = (metadata) => {
   const check = database.prepare('SELECT key FROM metadata WHERE key = ?');
   
   for (const [key, value] of Object.entries(updatedMetadata)) {
-    const exists = check.get(key);
+    const existsPromise = check.get(key);
+    const exists = isAsyncDb() ? await existsPromise : existsPromise;
     const valueStr = typeof value === 'object' ? JSON.stringify(value) : value;
     
     if (exists) {
-      update.run(valueStr, key);
+      const updatePromise = update.run(valueStr, key);
+      await runQuery(() => updatePromise);
     } else {
-      insert.run(key, valueStr);
+      const insertPromise = insert.run(key, valueStr);
+      await runQuery(() => insertPromise);
     }
   }
   

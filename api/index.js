@@ -102,10 +102,13 @@ module.exports = async (req, res) => {
         const id = parseInt(match[2]);
         if (type === 'transactions') {
           data = await updateTransaction(id, req.body);
+          const transactions = await getTransactions();
+          res.status(200).json({ transaction: data, transactions });
         } else if (type === 'adjusting-entries') {
           data = await updateAdjustingEntry(id, req.body);
+          const adjustingEntries = await getAdjustingEntries();
+          res.status(200).json({ entry: data, adjustingEntries });
         }
-        res.status(200).json(data);
         return;
       } else {
         res.status(404).json({ error: 'Not found' });

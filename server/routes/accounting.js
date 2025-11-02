@@ -77,11 +77,11 @@ router.get('/transactions', async (req, res) => {
 });
 
 // Add new transaction
-router.post('/transactions', (req, res) => {
+router.post('/transactions', async (req, res) => {
   try {
-    const transaction = addTransaction(req.body);
+    const transaction = await addTransaction(req.body);
     // Return updated transactions list for real-time sync
-    const transactions = getTransactions();
+    const transactions = await getTransactions();
     res.json({ transaction, transactions });
   } catch (error) {
     res.status(400).json({ error: error.message });
@@ -89,11 +89,11 @@ router.post('/transactions', (req, res) => {
 });
 
 // Update transaction
-router.put('/transactions/:id', (req, res) => {
+router.put('/transactions/:id', async (req, res) => {
   try {
-    const transaction = updateTransaction(parseInt(req.params.id), req.body);
+    const transaction = await updateTransaction(parseInt(req.params.id), req.body);
     // Return updated transactions list for real-time sync
-    const transactions = getTransactions();
+    const transactions = await getTransactions();
     res.json({ transaction, transactions });
   } catch (error) {
     res.status(400).json({ error: error.message });
@@ -101,11 +101,11 @@ router.put('/transactions/:id', (req, res) => {
 });
 
 // Delete transaction
-router.delete('/transactions/:id', (req, res) => {
+router.delete('/transactions/:id', async (req, res) => {
   try {
-    deleteTransaction(parseInt(req.params.id));
+    await deleteTransaction(parseInt(req.params.id));
     // Return updated transactions list for real-time sync
-    const transactions = getTransactions();
+    const transactions = await getTransactions();
     res.json({ success: true, transactions });
   } catch (error) {
     res.status(400).json({ error: error.message });
@@ -123,11 +123,11 @@ router.get('/adjusting-entries', async (req, res) => {
 });
 
 // Add new adjusting entry
-router.post('/adjusting-entries', (req, res) => {
+router.post('/adjusting-entries', async (req, res) => {
   try {
-    const entry = addAdjustingEntry(req.body);
+    const entry = await addAdjustingEntry(req.body);
     // Return updated adjusting entries list for real-time sync
-    const adjustingEntries = getAdjustingEntries();
+    const adjustingEntries = await getAdjustingEntries();
     res.json({ entry, adjustingEntries });
   } catch (error) {
     res.status(400).json({ error: error.message });
@@ -135,11 +135,11 @@ router.post('/adjusting-entries', (req, res) => {
 });
 
 // Update adjusting entry
-router.put('/adjusting-entries/:id', (req, res) => {
+router.put('/adjusting-entries/:id', async (req, res) => {
   try {
-    const entry = updateAdjustingEntry(parseInt(req.params.id), req.body);
+    const entry = await updateAdjustingEntry(parseInt(req.params.id), req.body);
     // Return updated adjusting entries list for real-time sync
-    const adjustingEntries = getAdjustingEntries();
+    const adjustingEntries = await getAdjustingEntries();
     res.json({ entry, adjustingEntries });
   } catch (error) {
     res.status(400).json({ error: error.message });
@@ -147,11 +147,11 @@ router.put('/adjusting-entries/:id', (req, res) => {
 });
 
 // Delete adjusting entry
-router.delete('/adjusting-entries/:id', (req, res) => {
+router.delete('/adjusting-entries/:id', async (req, res) => {
   try {
-    deleteAdjustingEntry(parseInt(req.params.id));
+    await deleteAdjustingEntry(parseInt(req.params.id));
     // Return updated adjusting entries list for real-time sync
-    const adjustingEntries = getAdjustingEntries();
+    const adjustingEntries = await getAdjustingEntries();
     res.json({ success: true, adjustingEntries });
   } catch (error) {
     res.status(400).json({ error: error.message });
@@ -179,9 +179,9 @@ router.get('/metadata', async (req, res) => {
 });
 
 // Update metadata
-router.put('/metadata', (req, res) => {
+router.put('/metadata', async (req, res) => {
   try {
-    const metadata = updateMetadata(req.body);
+    const metadata = await updateMetadata(req.body);
     res.json(metadata);
   } catch (error) {
     res.status(400).json({ error: error.message });

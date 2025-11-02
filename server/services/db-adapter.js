@@ -13,7 +13,21 @@ if (process.env.DATABASE_URL && process.env.DATABASE_URL.includes('neon.tech')) 
     const { neon } = require('@neondatabase/serverless');
     const dbUrl = process.env.DATABASE_URL;
     console.log('🔗 Connecting to Neon database...');
-    console.log('📋 DATABASE_URL preview:', dbUrl.substring(0, 50) + '...' + dbUrl.substring(dbUrl.length - 20));
+    
+    // Extract branch name from connection string
+    const branchMatch = dbUrl.match(/@([^.]+)\.([^/]+)\.neon\.tech/);
+    const branchName = branchMatch ? branchMatch[1] : 'unknown';
+    const region = branchMatch ? branchMatch[2] : 'unknown';
+    
+    console.log(`📋 DATABASE_URL preview: ${dbUrl.substring(0, 30)}...${dbUrl.substring(dbUrl.length - 30)}`);
+    console.log(`🌿 Branch: ${branchName}`);
+    console.log(`🌍 Region: ${region}`);
+    
+    // Check if branch matches
+    if (branchName !== 'main' && branchName !== 'dev') {
+      console.warn(`⚠️  Warning: Using branch '${branchName}' - make sure this matches your Neon console view!`);
+    }
+    
     const sql = neon(dbUrl);
     
     // Create adapter that mimics SQLite API

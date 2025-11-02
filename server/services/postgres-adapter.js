@@ -24,6 +24,106 @@ const initPostgres = async () => {
 };
 
 const initializeSchema = async () => {
+  // Check if using Neon
+  if (process.env.DATABASE_URL && process.env.DATABASE_URL.includes('neon.tech')) {
+    try {
+      const { neon } = require('@neondatabase/serverless');
+      const sql = neon(process.env.DATABASE_URL);
+      
+      // Create tables for Neon
+      await sql(`
+        CREATE TABLE IF NOT EXISTS chart_of_accounts (
+          code TEXT PRIMARY KEY,
+          name TEXT NOT NULL,
+          type TEXT NOT NULL CHECK(type IN ('asset', 'liability', 'equity', 'revenue', 'expense')),
+          is_contra INTEGER DEFAULT 0,
+          created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+          updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+        )
+      `);
+
+      await sql(`
+        CREATE TABLE IF NOT EXISTS transactions (
+          id SERIAL PRIMARY KEY,
+          date TEXT NOT NULL,
+          description TEXT NOT NULL,
+          created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+          updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+        )
+      `);
+
+      await sql(`
+        CREATE TABLE IF NOT EXISTS transaction_entries (
+          id SERIAL PRIMARY KEY,
+          transaction_id INTEGER NOT NULL REFERENCES transactions(id) ON DELETE CASCADE,
+          account_code TEXT NOT NULL REFERENCES chart_of_accounts(code),
+          debit REAL DEFAULT 0,
+          credit REAL DEFAULT 0,
+          CHECK((debit = 0 AND credit > 0) OR (credit = 0 AND debit > 0))
+        )
+      `);
+
+      await sql(`
+        CREATE TABLE IF NOT EXISTS adjusting_entries (
+          id SERIAL PRIMARY KEY,
+          date TEXT NOT NULL,
+          description TEXT NOT NULL,
+          created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+          updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+        )
+      `);
+
+      await sql(`
+        CREATE TABLE IF NOT EXISTS adjusting_entry_entries (
+          id SERIAL PRIMARY KEY,
+          adjusting_entry_id INTEGER NOT NULL REFERENCES adjusting_entries(id) ON DELETE CASCADE,
+          account_code TEXT NOT NULL REFERENCES chart_of_accounts(code),
+          debit REAL DEFAULT 0,
+          credit REAL DEFAULT 0,
+          CHECK((debit = 0 AND credit > 0) OR (credit = 0 AND debit > 0))
+        )
+      `);
+
+      await sql(`
+        CREATE TABLE IF NOT EXISTS metadata (
+          key TEXT PRIMARY KEY,
+          value TEXT NOT NULL,
+          updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+        )
+      `);
+
+      // Create indexes
+      await sql(`
+        CREATE INDEX IF NOT EXISTS idx_transaction_entries_transaction_id 
+        ON transaction_entries(transaction_id)
+      `);
+      
+      await sql(`
+        CREATE INDEX IF NOT EXISTS idx_transaction_entries_account_code 
+        ON transaction_entries(account_code)
+      `);
+      
+      await sql(`
+        CREATE INDEX IF NOT EXISTS idx_adjusting_entry_entries_entry_id 
+        ON adjusting_entry_entries(adjusting_entry_id)
+      `);
+      
+      await sql(`
+        CREATE INDEX IF NOT EXISTS idx_adjusting_entry_entries_account_code 
+        ON adjusting_entry_entries(account_code)
+      `);
+      
+      console.log('✅ Neon schema initialized');
+      return;
+    } catch (error) {
+      if (!error.message.includes('already exists')) {
+        console.error('Error creating Neon schema:', error);
+      }
+      return;
+    }
+  }
+  
+  // Vercel Postgres initialization
   if (!client) {
     await initPostgres();
   }

@@ -3,12 +3,76 @@
  * Supports: Vercel Postgres, Supabase, or In-Memory fallback
  */
 
-// Try to use Vercel Postgres if available
+// Try to use database if available
 let db = null;
 let dbType = 'none';
 
+// Check for Neon (recommended - serverless Postgres)
+if (process.env.DATABASE_URL && process.env.DATABASE_URL.includes('neon.tech')) {
+  try {
+    const { neon } = require('@neondatabase/serverless');
+    const sql = neon(process.env.DATABASE_URL);
+    
+    // Create adapter that mimics SQLite API
+    db = {
+      prepare: (query) => {
+        let paramIndex = 1;
+        const convertedQuery = query.replace(/\?/g, () => `$${paramIndex++}`);
+        
+        return {
+          run: async (...params) => {
+            try {
+              // For INSERT queries, we need to append RETURNING id
+              let modifiedQuery = convertedQuery;
+              if (convertedQuery.toUpperCase().includes('INSERT') && 
+                  !convertedQuery.toUpperCase().includes('RETURNING')) {
+                // Extract table name and add RETURNING id
+                const insertMatch = convertedQuery.match(/INSERT INTO\s+(\w+)/i);
+                if (insertMatch) {
+                  modifiedQuery = convertedQuery + ' RETURNING id';
+                }
+              }
+              
+              const result = await sql(modifiedQuery, params);
+              
+              return {
+                lastInsertRowid: result[0]?.id || null,
+                changes: Array.isArray(result) ? result.length : (result.rowCount || 0)
+              };
+            } catch (error) {
+              console.error('Neon query error:', error);
+              throw error;
+            }
+          },
+          get: async (...params) => {
+            const results = await sql(convertedQuery, params);
+            return results[0] || null;
+          },
+          all: async (...params) => {
+            return await sql(convertedQuery, params);
+          }
+        };
+      },
+      exec: async (sqlString) => {
+        await sql(sqlString);
+      },
+      pragma: () => ({ foreign_keys: 'ON' }),
+      close: async () => {}
+    };
+    dbType = 'neon';
+    console.log('✅ Using Neon Serverless Postgres');
+    
+    // Initialize schema
+    require('./postgres-adapter').initializeSchema().catch(err => {
+      console.error('Schema init error:', err);
+    });
+  } catch (error) {
+    console.warn('Neon not available, trying other options:', error.message);
+  }
+}
+
 // Check for Vercel Postgres
-if (process.env.POSTGRES_URL || process.env.POSTGRES_PRISMA_URL) {
+if (dbType === 'none' && (process.env.POSTGRES_URL || process.env.POSTGRES_PRISMA_URL)) {
   try {
     // Dynamic require to avoid errors if package not installed
     let pgAdapter;

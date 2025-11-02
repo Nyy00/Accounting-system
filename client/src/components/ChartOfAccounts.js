@@ -23,14 +23,11 @@ const ChartOfAccounts = ({ onRefresh }) => {
       setLoading(false);
       // Update cache
       initializeAccountCache(response.data);
-      if (onRefresh) {
-        onRefresh();
-      }
     } catch (error) {
       console.error('Error fetching accounts:', error);
       setLoading(false);
     }
-  }, [onRefresh]);
+  }, []);
 
   useEffect(() => {
     fetchAccounts();
@@ -64,6 +61,10 @@ const ChartOfAccounts = ({ onRefresh }) => {
         await axios.delete(`${API_URL}/api/accounting/accounts/${encodeURIComponent(code)}`);
         removeAccountCache(code);
         fetchAccounts();
+        // Refresh parent component to update account cache everywhere
+        if (onRefresh) {
+          onRefresh();
+        }
       } catch (error) {
         alert('Gagal menghapus akun: ' + (error.response?.data?.error || error.message));
       }
@@ -89,6 +90,10 @@ const ChartOfAccounts = ({ onRefresh }) => {
       setShowForm(false);
       setEditingAccount(null);
       fetchAccounts();
+      // Refresh parent component to update account cache everywhere
+      if (onRefresh) {
+        onRefresh();
+      }
     } catch (error) {
       alert('Gagal menyimpan akun: ' + (error.response?.data?.error || error.message));
     }

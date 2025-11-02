@@ -843,120 +843,133 @@ const calculateReports = async () => {
   const totalAssets = assets.reduce((sum, a) => sum + (a.amount || 0), 0);
   const totalLiabilities = liabilities.reduce((sum, l) => sum + (l.amount || 0), 0);
   
-  // For equity in financial position:
-  const initialCapital = equityItems
-    .filter(e => e.account === '3-101' || e.account === '3-102')
-    .reduce((sum, e) => sum + (e.amount || 0), 0);
+  // Get all equity accounts that are capital accounts (excluding retained earnings like 3-200)
+  const capitalAccounts = equityItems.filter(e => e.account !== '3-200');
+  const totalInitialCapitalFromEquity = capitalAccounts.reduce((sum, e) => sum + (e.amount || 0), 0);
   const retainedEarnings = equityItems.find(e => e.account === '3-200')?.amount || 0;
-  const totalEquity = initialCapital + retainedEarnings + netIncome;
-  
+  const totalEquity = totalInitialCapitalFromEquity + retainedEarnings + netIncome;
+
   // S7 - Statement of Changes in Equity
-  // Get actual capital balances from database (not hardcoded)
-  const aminCapitalBalance = balances['3-101'] ? balances['3-101'].balance : 0;
-  const fawziCapitalBalance = balances['3-102'] ? balances['3-102'].balance : 0;
-  const retainedEarningsBalance = balances['3-200'] ? balances['3-200'].balance : 0;
-  
-  // Calculate initial capital
-  // For equity accounts: if there are no debits (prive), the current balance IS the initial capital
-  // If there are debits (prive), we need to add them back to get initial capital
-  
-  // Get all debit and credit amounts for capital accounts from transactions and adjustments
-  let aminDebits = 0;
-  let aminCredits = 0;
-  let fawziDebits = 0;
-  let fawziCredits = 0;
-  
-  // Check transactions
+  // Get all capital accounts dynamically from journal entries (transactions and adjusting entries)
   const transactions = await getTransactions();
+  const adjustments = await getAdjustingEntries();
+  
+  // Create allAccounts array for looking up account names
+  const allAccounts = [
+    ...(accounts.assets || []),
+    ...(accounts.liabilities || []),
+    ...(accounts.equity || []),
+    ...(accounts.revenue || []),
+    ...(accounts.expenses || [])
+  ];
+  
+  // Track all equity accounts that appear in transactions (excluding retained earnings)
+  const equityAccountData = {};
+  
+  // Process transactions to find all equity accounts used
   if (Array.isArray(transactions)) {
     transactions.forEach(trans => {
       if (Array.isArray(trans.entries)) {
         trans.entries.forEach(entry => {
-          if (entry.account === '3-101') {
-            aminDebits += entry.debit || 0;
-            aminCredits += entry.credit || 0;
-          } else if (entry.account === '3-102') {
-            fawziDebits += entry.debit || 0;
-            fawziCredits += entry.credit || 0;
+          // Only track equity accounts (starting with '3-') but not retained earnings (3-200)
+          if (entry.account && entry.account.startsWith('3-') && entry.account !== '3-200') {
+            if (!equityAccountData[entry.account]) {
+              equityAccountData[entry.account] = {
+                code: entry.account,
+                name: '', // Will be filled from chart of accounts
+                debits: 0,
+                credits: 0,
+                balance: 0
+              };
+            }
+            equityAccountData[entry.account].debits += entry.debit || 0;
+            equityAccountData[entry.account].credits += entry.credit || 0;
           }
         });
       }
     });
   }
   
-  // Check adjusting entries
-  const adjustments = await getAdjustingEntries();
+  // Process adjusting entries
   if (Array.isArray(adjustments)) {
     adjustments.forEach(adj => {
       if (Array.isArray(adj.entries)) {
         adj.entries.forEach(entry => {
-          if (entry.account === '3-101') {
-            aminDebits += entry.debit || 0;
-            aminCredits += entry.credit || 0;
-          } else if (entry.account === '3-102') {
-            fawziDebits += entry.debit || 0;
-            fawziCredits += entry.credit || 0;
+          if (entry.account && entry.account.startsWith('3-') && entry.account !== '3-200') {
+            if (!equityAccountData[entry.account]) {
+              equityAccountData[entry.account] = {
+                code: entry.account,
+                name: '',
+                debits: 0,
+                credits: 0,
+                balance: 0
+              };
+            }
+            equityAccountData[entry.account].debits += entry.debit || 0;
+            equityAccountData[entry.account].credits += entry.credit || 0;
           }
         });
       }
     });
   }
   
-  // Calculate initial capital
-  // Formula: Initial Capital = Current Balance - (Credits - Debits)
-  // For equity: Credits increase balance, Debits decrease balance
-  // So to reverse: Initial = Current - (Credits - Debits)
-  // Which simplifies to: Initial = Current - Credits + Debits
+  // Fill in account names from chart of accounts and calculate initial capital
+  const equityChanges = [];
+  let totalInitialCapital = 0;
   
-  // However, if balance equals credits (meaning all balance came from transactions),
-  // and there are no debits, we treat the credits as initial capital
-  // This handles the case where initial capital was entered as a transaction
+  // Sort by account code for consistent ordering
+  const sortedEquityAccounts = Object.keys(equityAccountData).sort();
   
-  let initialAminCapital;
-  if (aminDebits === 0 && aminCredits > 0 && aminCapitalBalance === aminCredits) {
-    // All balance came from credits, treat credits as initial capital
-    initialAminCapital = aminCredits;
-  } else {
-    // Standard calculation: reverse transactions to get initial
-    initialAminCapital = aminCapitalBalance - aminCredits + aminDebits;
-  }
-  
-  let initialFawziCapital;
-  if (fawziDebits === 0 && fawziCredits > 0 && fawziCapitalBalance === fawziCredits) {
-    // All balance came from credits, treat credits as initial capital
-    initialFawziCapital = fawziCredits;
-  } else {
-    // Standard calculation: reverse transactions to get initial
-    initialFawziCapital = fawziCapitalBalance - fawziCredits + fawziDebits;
-  }
-  
-  // Ensure initial capital is not negative (minimum 0)
-  initialAminCapital = Math.max(0, initialAminCapital);
-  initialFawziCapital = Math.max(0, initialFawziCapital);
-  const totalInitialCapital = initialAminCapital + initialFawziCapital;
-  
-  const equityChanges = [
-    {
-      description: 'Modal Awal Amin',
-      amount: initialAminCapital
-    },
-    {
-      description: 'Modal Awal Fawzi',
-      amount: initialFawziCapital
-    },
-    {
-      description: 'Total Modal Awal',
-      amount: totalInitialCapital
-    },
-    {
-      description: 'Laba Bersih',
-      amount: netIncome
-    },
-    {
-      description: 'Total Ekuitas (31 Januari 2024)',
-      amount: totalEquity
+  for (const accountCode of sortedEquityAccounts) {
+    const accountData = equityAccountData[accountCode];
+    const accountBalance = balances[accountCode] ? balances[accountCode].balance : 0;
+    
+    // Get account name from chart of accounts
+    const accountInfo = allAccounts.find(acc => acc.code === accountCode);
+    const accountName = accountInfo ? accountInfo.name : accountCode;
+    
+    // Calculate initial capital
+    // Formula: Initial Capital = Current Balance - (Credits - Debits)
+    // For equity: Credits increase balance, Debits decrease balance
+    // So to reverse: Initial = Current - Credits + Debits
+    
+    let initialCapital;
+    if (accountData.debits === 0 && accountData.credits > 0 && accountBalance === accountData.credits) {
+      // All balance came from credits, treat credits as initial capital
+      initialCapital = accountData.credits;
+    } else {
+      // Standard calculation: reverse transactions to get initial
+      initialCapital = accountBalance - accountData.credits + accountData.debits;
     }
-  ];
+    
+    // Ensure initial capital is not negative (minimum 0)
+    initialCapital = Math.max(0, initialCapital);
+    
+    if (initialCapital > 0 || accountData.debits > 0 || accountData.credits > 0) {
+      equityChanges.push({
+        description: accountName,
+        amount: initialCapital
+      });
+      totalInitialCapital += initialCapital;
+    }
+  }
+  
+  // Add total initial capital (always add, even if 0)
+  equityChanges.push({
+    description: 'Total Modal Awal',
+    amount: totalInitialCapital
+  });
+  
+  // Add net income and total equity
+  equityChanges.push({
+    description: 'Laba Bersih',
+    amount: netIncome
+  });
+  
+  equityChanges.push({
+    description: 'Total Ekuitas (31 Januari 2024)',
+    amount: totalEquity
+  });
   
   return {
     trialBalance,

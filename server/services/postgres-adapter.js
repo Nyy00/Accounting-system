@@ -30,88 +30,135 @@ const initializeSchema = async () => {
       const { neon } = require('@neondatabase/serverless');
       const sql = neon(process.env.DATABASE_URL);
       
-      // Create tables for Neon
-      await sql(`
-        CREATE TABLE IF NOT EXISTS chart_of_accounts (
-          code TEXT PRIMARY KEY,
-          name TEXT NOT NULL,
-          type TEXT NOT NULL CHECK(type IN ('asset', 'liability', 'equity', 'revenue', 'expense')),
-          is_contra INTEGER DEFAULT 0,
-          created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-          updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
-        )
-      `);
+      console.log('Initializing Neon schema...');
+      
+      // Create tables for Neon - execute one at a time to avoid conflicts
+      try {
+        await sql(`
+          CREATE TABLE IF NOT EXISTS chart_of_accounts (
+            code TEXT PRIMARY KEY,
+            name TEXT NOT NULL,
+            type TEXT NOT NULL CHECK(type IN ('asset', 'liability', 'equity', 'revenue', 'expense')),
+            is_contra INTEGER DEFAULT 0,
+            created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+            updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+          )
+        `);
+        console.log('✅ Created chart_of_accounts table');
+      } catch (err) {
+        if (!err.message?.includes('already exists') && !err.message?.includes('duplicate key')) {
+          throw err;
+        }
+      }
 
-      await sql(`
-        CREATE TABLE IF NOT EXISTS transactions (
-          id SERIAL PRIMARY KEY,
-          date TEXT NOT NULL,
-          description TEXT NOT NULL,
-          created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-          updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
-        )
-      `);
+      try {
+        await sql(`
+          CREATE TABLE IF NOT EXISTS transactions (
+            id SERIAL PRIMARY KEY,
+            date TEXT NOT NULL,
+            description TEXT NOT NULL,
+            created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+            updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+          )
+        `);
+        console.log('✅ Created transactions table');
+      } catch (err) {
+        if (!err.message?.includes('already exists') && !err.message?.includes('duplicate key')) {
+          throw err;
+        }
+      }
 
-      await sql(`
-        CREATE TABLE IF NOT EXISTS transaction_entries (
-          id SERIAL PRIMARY KEY,
-          transaction_id INTEGER NOT NULL REFERENCES transactions(id) ON DELETE CASCADE,
-          account_code TEXT NOT NULL REFERENCES chart_of_accounts(code),
-          debit REAL DEFAULT 0,
-          credit REAL DEFAULT 0,
-          CHECK((debit = 0 AND credit > 0) OR (credit = 0 AND debit > 0))
-        )
-      `);
+      try {
+        await sql(`
+          CREATE TABLE IF NOT EXISTS transaction_entries (
+            id SERIAL PRIMARY KEY,
+            transaction_id INTEGER NOT NULL REFERENCES transactions(id) ON DELETE CASCADE,
+            account_code TEXT NOT NULL REFERENCES chart_of_accounts(code),
+            debit REAL DEFAULT 0,
+            credit REAL DEFAULT 0,
+            CHECK((debit = 0 AND credit > 0) OR (credit = 0 AND debit > 0))
+          )
+        `);
+        console.log('✅ Created transaction_entries table');
+      } catch (err) {
+        if (!err.message?.includes('already exists') && !err.message?.includes('duplicate key')) {
+          throw err;
+        }
+      }
 
-      await sql(`
-        CREATE TABLE IF NOT EXISTS adjusting_entries (
-          id SERIAL PRIMARY KEY,
-          date TEXT NOT NULL,
-          description TEXT NOT NULL,
-          created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-          updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
-        )
-      `);
+      try {
+        await sql(`
+          CREATE TABLE IF NOT EXISTS adjusting_entries (
+            id SERIAL PRIMARY KEY,
+            date TEXT NOT NULL,
+            description TEXT NOT NULL,
+            created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+            updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+          )
+        `);
+        console.log('✅ Created adjusting_entries table');
+      } catch (err) {
+        if (!err.message?.includes('already exists') && !err.message?.includes('duplicate key')) {
+          throw err;
+        }
+      }
 
-      await sql(`
-        CREATE TABLE IF NOT EXISTS adjusting_entry_entries (
-          id SERIAL PRIMARY KEY,
-          adjusting_entry_id INTEGER NOT NULL REFERENCES adjusting_entries(id) ON DELETE CASCADE,
-          account_code TEXT NOT NULL REFERENCES chart_of_accounts(code),
-          debit REAL DEFAULT 0,
-          credit REAL DEFAULT 0,
-          CHECK((debit = 0 AND credit > 0) OR (credit = 0 AND debit > 0))
-        )
-      `);
+      try {
+        await sql(`
+          CREATE TABLE IF NOT EXISTS adjusting_entry_entries (
+            id SERIAL PRIMARY KEY,
+            adjusting_entry_id INTEGER NOT NULL REFERENCES adjusting_entries(id) ON DELETE CASCADE,
+            account_code TEXT NOT NULL REFERENCES chart_of_accounts(code),
+            debit REAL DEFAULT 0,
+            credit REAL DEFAULT 0,
+            CHECK((debit = 0 AND credit > 0) OR (credit = 0 AND debit > 0))
+          )
+        `);
+        console.log('✅ Created adjusting_entry_entries table');
+      } catch (err) {
+        if (!err.message?.includes('already exists') && !err.message?.includes('duplicate key')) {
+          throw err;
+        }
+      }
 
-      await sql(`
-        CREATE TABLE IF NOT EXISTS metadata (
-          key TEXT PRIMARY KEY,
-          value TEXT NOT NULL,
-          updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
-        )
-      `);
+      try {
+        await sql(`
+          CREATE TABLE IF NOT EXISTS metadata (
+            key TEXT PRIMARY KEY,
+            value TEXT NOT NULL,
+            updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+          )
+        `);
+        console.log('✅ Created metadata table');
+      } catch (err) {
+        if (!err.message?.includes('already exists') && !err.message?.includes('duplicate key')) {
+          throw err;
+        }
+      }
 
       // Create indexes
-      await sql(`
-        CREATE INDEX IF NOT EXISTS idx_transaction_entries_transaction_id 
-        ON transaction_entries(transaction_id)
-      `);
-      
-      await sql(`
-        CREATE INDEX IF NOT EXISTS idx_transaction_entries_account_code 
-        ON transaction_entries(account_code)
-      `);
-      
-      await sql(`
-        CREATE INDEX IF NOT EXISTS idx_adjusting_entry_entries_entry_id 
-        ON adjusting_entry_entries(adjusting_entry_id)
-      `);
-      
-      await sql(`
-        CREATE INDEX IF NOT EXISTS idx_adjusting_entry_entries_account_code 
-        ON adjusting_entry_entries(account_code)
-      `);
+      try {
+        await sql(`
+          CREATE INDEX IF NOT EXISTS idx_transaction_entries_transaction_id 
+          ON transaction_entries(transaction_id)
+        `);
+        await sql(`
+          CREATE INDEX IF NOT EXISTS idx_transaction_entries_account_code 
+          ON transaction_entries(account_code)
+        `);
+        await sql(`
+          CREATE INDEX IF NOT EXISTS idx_adjusting_entry_entries_entry_id 
+          ON adjusting_entry_entries(adjusting_entry_id)
+        `);
+        await sql(`
+          CREATE INDEX IF NOT EXISTS idx_adjusting_entry_entries_account_code 
+          ON adjusting_entry_entries(account_code)
+        `);
+        console.log('✅ Created indexes');
+      } catch (err) {
+        // Index errors are usually not critical
+        console.warn('Index creation warning:', err.message);
+      }
       
       console.log('✅ Neon schema initialized successfully');
       return;
@@ -123,12 +170,14 @@ const initializeSchema = async () => {
           errorMsg.includes('pg_type_typname_nsp_index')) {
         // Schema or types already exist or being created by another request
         // This is normal in concurrent serverless environments
+        console.log('✅ Neon schema already exists (or being created by another request)');
         return; // Silently return - schema is fine
       } else {
-        // Only log unexpected errors (don't throw to avoid blocking)
+        // Log unexpected errors for debugging
         console.error('❌ Error creating Neon schema:', errorMsg);
+        console.error('Error details:', error);
+        // Don't throw - schema might be partially created, let queries handle it
       }
-      // Don't throw - let it continue (schema might already be initialized)
       return;
     }
   }

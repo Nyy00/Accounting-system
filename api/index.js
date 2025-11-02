@@ -1,22 +1,31 @@
 // Vercel Serverless Function for API routes
 module.exports = async (req, res) => {
-  // Initialize database connection and schema (only once, silently handle conflicts)
+  // Initialize database connection and schema FIRST before handling requests
   try {
     const { getDatabase } = require('../server/services/database');
     getDatabase(); // This will initialize the database connection
     
-    // Initialize schema if using Neon or Postgres (don't wait, let it run async)
+    // Initialize schema if using Neon or Postgres - MUST complete before handling requests
     const { getDbType } = require('../server/services/db-adapter');
     const dbType = getDbType();
     if (dbType === 'neon' || dbType === 'postgres' || dbType === 'supabase') {
-      // Run schema init in background, ignore errors (might be concurrent requests)
       const { initializeSchema } = require('../server/services/postgres-adapter');
-      initializeSchema().catch(() => {
-        // Silently ignore - schema might already be initialized or being initialized by another request
-      });
+      // Wait for schema initialization to complete (important for first request)
+      try {
+        await initializeSchema();
+      } catch (err) {
+        // Ignore "already exists" errors, but log others for debugging
+        const errMsg = err.message || err.toString() || '';
+        if (!errMsg.includes('already exists') && 
+            !errMsg.includes('duplicate key value') &&
+            !errMsg.includes('pg_type_typname_nsp_index')) {
+          console.warn('Schema initialization warning (non-critical):', errMsg);
+        }
+      }
     }
   } catch (error) {
-    // Silently continue - database might already be initialized
+    console.error('Database initialization error:', error.message || error);
+    // Continue anyway - might be using in-memory fallback or schema might exist
   }
 
   // Set CORS headers

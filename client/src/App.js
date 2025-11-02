@@ -21,6 +21,7 @@ function App() {
   const [reports, setReports] = useState(null);
   const [loading, setLoading] = useState(true);
   const [metadata, setMetadata] = useState(null);
+  const [processingNextStage, setProcessingNextStage] = useState(false); // ✅ NEW: Loading state
 
   useEffect(() => {
     fetchData();
@@ -56,21 +57,63 @@ function App() {
     }
   };
 
+  // ✅ IMPROVED: handleNextStage dengan loading state dan error handling
   const handleNextStage = async (currentStage) => {
-    // Refresh data before moving to next stage
-    await fetchData();
-    
-    // Navigate to next stage
-    const stages = ['s1', 's2', 's3', 's4', 's5', 's6', 's7'];
-    const currentIndex = stages.indexOf(currentStage);
-    if (currentIndex < stages.length - 1) {
-      setActiveReport(stages[currentIndex + 1]);
+    try {
+      // Set loading state
+      setProcessingNextStage(true);
+      
+      // Refresh data before moving to next stage
+      await fetchData();
+      
+      // Small delay untuk memastikan UI terupdate
+      await new Promise(resolve => setTimeout(resolve, 300));
+      
+      // Navigate to next stage
+      const stages = ['s1', 's2', 's3', 's4', 's5', 's6', 's7'];
+      const currentIndex = stages.indexOf(currentStage);
+      
+      if (currentIndex < stages.length - 1) {
+        const nextStage = stages[currentIndex + 1];
+        setActiveReport(nextStage);
+        
+        // Scroll to top untuk user experience yang lebih baik
+        window.scrollTo({ top: 0, behavior: 'smooth' });
+        
+        // Optional: Show success notification
+        console.log(`✅ Berhasil pindah dari ${currentStage.toUpperCase()} ke ${nextStage.toUpperCase()}`);
+      } else {
+        // Already at last stage
+        alert('Anda sudah berada di tahap terakhir (S7 - Laporan Perubahan Ekuitas)');
+      }
+    } catch (error) {
+      console.error('Error pada handleNextStage:', error);
+      alert('Terjadi kesalahan saat memproses ke tahap selanjutnya. Silakan coba lagi.');
+    } finally {
+      setProcessingNextStage(false);
     }
   };
 
   const renderReport = () => {
     if (loading) {
       return <div className="loading">Memuat data...</div>;
+    }
+
+    // ✅ NEW: Show loading overlay saat processing next stage
+    if (processingNextStage) {
+      return (
+        <div style={{
+          padding: '60px',
+          textAlign: 'center',
+          backgroundColor: '#f8f9fa',
+          borderRadius: '8px',
+          margin: '20px 0'
+        }}>
+          <div style={{ fontSize: '48px', marginBottom: '20px' }}>⏳</div>
+          <h3 style={{ color: '#667eea', marginBottom: '10px' }}>Memproses ke tahap selanjutnya...</h3>
+          <p style={{ color: '#6c757d' }}>Mohon tunggu sebentar</p>
+        </div>
+      );
     }
 
     switch (activeReport) {
@@ -107,4 +150,3 @@ function App() {
 }
 
 export default App;
-

@@ -80,6 +80,27 @@ const GeneralJournal = ({ transactions, onRefresh, onNextStage, metadata }) => {
     }
   };
 
+  // ✅ FIX: Handler untuk next stage dengan loading state
+  const handleNextStageClick = async () => {
+    try {
+      // Refresh data terlebih dahulu
+      if (onRefresh) {
+        await onRefresh();
+      }
+      
+      // Tunggu sebentar agar data ter-update
+      await new Promise(resolve => setTimeout(resolve, 300));
+      
+      // Navigasi ke stage selanjutnya
+      if (onNextStage) {
+        onNextStage();
+      }
+    } catch (error) {
+      console.error('Error pada next stage:', error);
+      alert('Terjadi kesalahan saat memproses ke tahap selanjutnya');
+    }
+  };
+
   return (
     <div>
       <h2 className="report-title">S1 - JURNAL UMUM</h2>
@@ -94,22 +115,22 @@ const GeneralJournal = ({ transactions, onRefresh, onNextStage, metadata }) => {
         <button onClick={handleAddClick} className="btn-primary">
           + Tambah Transaksi
         </button>
-        {localTransactions.length > 0 && (
-          <button 
-            onClick={async () => {
-              if (onRefresh) {
-                await onRefresh();
-              }
-              if (onNextStage) {
-                onNextStage();
-              }
-            }} 
-            className="btn-success"
-            style={{ marginLeft: '10px', backgroundColor: '#28a745', color: 'white' }}
-          >
-            ➜ Proses ke Tahap Selanjutnya (S2 - Buku Besar)
-          </button>
-        )}
+        
+        {/* ✅ FIX: Button selalu muncul, dengan kondisi disabled jika tidak ada transaksi */}
+        <button 
+          onClick={handleNextStageClick}
+          className="btn-success"
+          style={{ 
+            marginLeft: '10px', 
+            backgroundColor: localTransactions.length > 0 ? '#28a745' : '#ccc', 
+            color: 'white',
+            cursor: localTransactions.length > 0 ? 'pointer' : 'not-allowed'
+          }}
+          disabled={localTransactions.length === 0}
+          title={localTransactions.length === 0 ? 'Tambahkan minimal 1 transaksi terlebih dahulu' : 'Lanjut ke S2 - Buku Besar'}
+        >
+          ➜ Proses ke Tahap Selanjutnya (S2 - Buku Besar)
+        </button>
       </div>
       
       {showForm && (
@@ -118,6 +139,25 @@ const GeneralJournal = ({ transactions, onRefresh, onNextStage, metadata }) => {
           onSave={handleFormSave}
           onCancel={handleFormClose}
         />
+      )}
+      
+      {/* ✅ FIX: Tampilkan pesan jika tidak ada transaksi */}
+      {localTransactions.length === 0 && (
+        <div style={{ 
+          padding: '40px', 
+          textAlign: 'center', 
+          backgroundColor: '#f8f9fa', 
+          borderRadius: '8px', 
+          margin: '20px 0',
+          border: '2px dashed #dee2e6'
+        }}>
+          <p style={{ fontSize: '18px', color: '#6c757d', marginBottom: '10px' }}>
+            📝 Belum ada transaksi
+          </p>
+          <p style={{ fontSize: '14px', color: '#6c757d' }}>
+            Klik tombol "+ Tambah Transaksi" untuk memulai mencatat jurnal umum
+          </p>
+        </div>
       )}
       
       <div className="table-container">
@@ -178,4 +218,3 @@ const GeneralJournal = ({ transactions, onRefresh, onNextStage, metadata }) => {
 };
 
 export default GeneralJournal;
-
